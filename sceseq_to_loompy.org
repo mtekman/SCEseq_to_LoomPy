@@ -91,7 +91,7 @@ This section will be updated as I move through.
 + [X] genes - Vector with gene names of all genes in \code{ndata} remaining after filtering.
 + [ ] dimRed - list object object storing information on a feature matrix obtained by dimensional reduction, batch effect correction etc. Component \code{x} stores the actual feature matrix.
 + [ ] distances - distance (or dis-similarity) matrix computed by RaceID3.
-+ [ ] imputed - list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours, the second matrix contains the probabilities at which each cell contributes to thye imputed gene expression value for the cell correponding to the columns.
++ [ ] imputed - list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours, the second matrix contains the probabilities at which each cell contributes to the imputed gene expression value for the cell correponding to the columns.
 + [ ] tsne - data.frame with coordinates of two-dimensional tsne layout computed by RaceID3.
 + [ ] fr - data.frame with coordinates of two-dimensional Fruchterman-Rheingold graphlayout computed by RaceID3.
 + [ ] cluster - list storing information on the initial clustering step of the RaceID3 algorithm
@@ -107,18 +107,26 @@ This section will be updated as I move through.
 
 ** Assigned 
 
- + /matrix :: getfdata()
+ + /matrix :: getfdata(), NxM
  + /layers ::
-   - /layers/normalized :: @ndata
- + /row_attrs ::
-   - /row_attrs/GeneID :: @genes
-   - /row_attrs :: 
- + /col_attrs ::
-   - /col_attrs/Counts :: @counts
-   - /col_attrs/CellID :: names(@counts)
+   - /layers/normalized :: @ndata, NxM
+ + /row_attrs :: (N attrs)
+   - /row_attrs/GeneID :: @genes, Nx1
+   - /row_attrs/a :: 
+ + /col_attrs :: (M attrs)
+   - /col_attrs/CellID :: names(@counts), 1xM
+   - /col_attrs/Counts :: @counts, 1xM
+   - /col_attrs/distances :: @distances, MxM
  + /row_graphs ::
    - /row_
+ + /col_graphs ::
+   - /col_graphs/KNN ::
 
-*** /col_graphs
-As above.
-**** /col_graphs/KNN
+* Experimenting with RData
+
+This is a RaceID object I took from a late stage in the analysis 
+
+
+  #+begin_src R
+  
+  #+end_src
