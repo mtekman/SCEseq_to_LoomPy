@@ -1,12 +1,12 @@
-The aim of this notebook to is document the process of creating a SCESeq to Loompy converter
+The aim of this notebook to is document the process of creating a SCESeq to Loompy or AnnData converter
 
 * Motivation
  + RaceID uses SCESeq as its container format for various matrices and row/column attributes
  + SCESeq is an R format, and therefore is binary and almost completely opaque to Galaxy
  + Loompy is an increasingly more adapted standard (ScanPy, SCope, LoomR, etc).
 
-** Why Loom over AnnData
-  + AnnData is also quite populer and is the defacto standard for Scanpy, but it has no web vizualizer, whereas Loom does.
+** Why AnnData over Loom
+  + AnnData has a visualiser in Galaxy ([[https://github.com/galaxyproject/galaxy/tree/dev/config/plugins/interactive_environments/cellxgene][cellxgene]])
 
 * Format Background
 
@@ -75,35 +75,53 @@ As above.
 **** /col_graphs/KNN
 This contains three sublayers (/col_graphs/KNN/a,/col_graphs/KNN/b,/col_graphs/KNN/w) where a = 'from', b = 'to', w = 'edge weight'
 
-** Issues
+*** Issues
+ The filtered matrices, and the some of the slots rely mostly on the ndata. Even getfdata returns the raw expression of the subsetted cells and genes using ndata rownames. Perhaps to keep all the matrices the same, we should set the matrix layer as the getfdata slot and the ndata slot as a normalised layer, with the implicit idea that the pre-filtered matrix is never used again in the analysis for clustering or projection or anything.
 
-The filtered matrices, and the some of the slots rely mostly on the ndata. Even getfdata returns the raw expression of the subsetted cells and genes using ndata rownames. Perhaps to keep all the matrices the same, we should set the matrix layer as the getfdata slot and the ndata slot as a normalised layer, with the implicit idea that the pre-filtered matrix is never used again in the analysis for clustering or projection or anything.
 
-* Mapping
+** TODO Notes about AnnData
+
+AnnData can take data that doesn't quite fit the dimensions of the regular data via "uns"
+
+* Mapping to Loompy
 
 This section will be updated as I move through.
 
-** [4/18] To assign:
+** [9/18] To assign:
  
 + [X] expdata - The raw expression data matrix with cells as columns and genes as rows in sparse matrix format.
 + [X] ndata - Filtered data with expression normalized to one for each cell.
 + [X] counts - Vector with total transcript counts for each cell in \code{ndata} remaining after filtering.
 + [X] genes - Vector with gene names of all genes in \code{ndata} remaining after filtering.
 + [ ] dimRed - list object object storing information on a feature matrix obtained by dimensional reduction, batch effect correction etc. Component \code{x} stores the actual feature matrix.
-+ [ ] distances - distance (or dis-similarity) matrix computed by RaceID3.
-+ [ ] imputed - list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours, the second matrix contains the probabilities at which each cell contributes to the imputed gene expression value for the cell correponding to the columns.
+  - [ ] ICA (icafast package)
+    - [ ] S,Y - [1:500, 1:M-1]
+    - [ ] W,Q,R - [1:M-1, 1:M]
+    - [ ] M - [1:M, 1:M-1]
+    - [ ] vafs - [1:M-1]
+    - [ ] iter (int)
+
+  - [ ] PCA (irlba package for matrix decomposition)
+    - [ ] d - [1:M] max(nu,nv)
+    - [ ] u - [1:M, 1:M-1] nu left vectors
+    - [ ] v - [1:500, 1:M-1] ]nv right vectors  (can't use these...)
+    - [ ] iter (int)
+    - [ ] mprod
++ [X] distances - distance (or dis-similarity) matrix computed by RaceID3.
++ [X] imputed - list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours, the second matrix contains the probabilities at which each cell contributes to the imputed gene expression value for the cell correponding to the columns.
 + [ ] tsne - data.frame with coordinates of two-dimensional tsne layout computed by RaceID3.
 + [ ] fr - data.frame with coordinates of two-dimensional Fruchterman-Rheingold graphlayout computed by RaceID3.
-+ [ ] cluster - list storing information on the initial clustering step of the RaceID3 algorithm
-+ [ ] background - list storing the polynomial fit for the background model of gene expression variability computed by RaceID3, which is used for outlier identification.
-+ [ ] out - list storing information on outlier cells used for the prediction of rare cell types by RaceID3
-+ [ ] cpart - vector containing the final clustering (i.e. cell type) partition computed by RaceID3
-+ [ ] fcol - vector contaning the colour scheme for the RaceID3 clusters
-+ [ ] medoids - vector containing the cell ids for th cluster medoids
-+ [ ] filterpar - list containing the parameters used for cell and gene filterung
-+ [ ] clusterpar - list containing the parameters used for clustering
-+ [ ] outlierpar - list containing the parameters used for outlier identification
-
++ [X] cluster - list storing information on the initial clustering step of the RaceID3 algorithm
+  - [X] kpart (1xM) of assignments to the N clusters.
++ [-] *Nope* background - list storing the polynomial fit for the background model of gene expression variability computed by RaceID3, which is used for outlier identification.
++ [X] out - list storing information on outlier cells used for the prediction of rare cell types by RaceID3
+  - [X] cprobs -- all the others don't have fitting dimensions
++ [X] cpart - vector containing the final clustering (i.e. cell type) partition computed by RaceID3
++ [-] *Nope* fcol - vector contaning the colour scheme for the RaceID3 clusters
++ [-] *Nope* medoids - vector containing the cell ids for th cluster medoids
++ [-] *Nope* filterpar - list containing the parameters used for cell and gene filterung
++ [-] *Nope* clusterpar - list containing the parameters used for clustering
++ [-] *Nope* outlierpar - list containing the parameters used for outlier identification
 
 ** Assigned 
 
@@ -112,21 +130,72 @@ This section will be updated as I move through.
    - /layers/normalized :: @ndata, NxM
  + /row_attrs :: (N attrs)
    - /row_attrs/GeneID :: @genes, Nx1
-   - /row_attrs/a :: 
+   - /row_attrs/DimRed :: @dimred$x , NxN
  + /col_attrs :: (M attrs)
    - /col_attrs/CellID :: names(@counts), 1xM
    - /col_attrs/Counts :: @counts, 1xM
    - /col_attrs/distances :: @distances, MxM
+   - /col_attrs/CProbs :: @out$cprobs
+   - /col_attrs/ClusterInitial :: @cluster$kpart, 1xM
+   - /col_attrs/ClusterFinal :: @cpart, 1xM
+   - /col_attrs/imputedRefCell :: @imputed$nn, kxM (but these are indices, so change these to actual strings for each k neighbor of the cell)
+   - /col_attrs/imputedRefProbs :: @imputed$probs, kxM
  + /row_graphs ::
-   - /row_
+
  + /col_graphs ::
    - /col_graphs/KNN ::
+
+
+
+* Mapping to AnnData
+
+** TODO This
 
 * Experimenting with RData
 
 This is a RaceID object I took from a late stage in the analysis 
 
 
-  #+begin_src R
-  
+  #+begin_src R :session yes  :results output
+    library(RaceID)
+    tab <- readRDS('test.rdata')@sc
+    str(tab, max.level = 2)
   #+end_src
+
+  #+RESULTS:
+  #+begin_example
+
+  Formal class 'SCseq' [package "RaceID"] with 18 slots
+    ..@ expdata   :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+    ..@ ndata     :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+    ..@ counts    : Named num [1:287] 5697 11803 14142 3801 3763 ...
+    .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+    ..@ genes     : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+    ..@ dimRed    : list()
+    ..@ distances : num [1:287, 1:287] 0 0.358 0.201 0.232 0.457 ...
+    .. ..- attr(*, "dimnames")=List of 2
+    ..@ imputed   : list()
+    ..@ tsne      :'data.frame':	287 obs. of  2 variables:
+    ..@ fr        :'data.frame':	287 obs. of  2 variables:
+    ..@ cluster   :List of 5
+    ..@ background:List of 1
+    ..@ out       :List of 5
+    ..@ cpart     : Named int [1:287] 1 2 3 1 4 3 4 3 3 5 ...
+    .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+    ..@ medoids   : chr [1:14] "II5d_52" "II5d_61" "II5d_56" "I5d_52" ...
+    ..@ fcol      : chr [1:14] "#0024FFFF" "#00FF92FF" "#B600FFFF" "#00FF24FF" ...
+    ..@ filterpar :List of 7
+    ..@ clusterpar:List of 9
+    ..@ outlierpar:List of 4
+  #+end_example
+
+* Questions
+
+** Is this going to be a True wrapper?
+ + i.e. is every variable going to be completely absorbed into the AnnData?
+ + If so, then I would need to run a converted/deconverter between every wrapper
+
+
+** Should I only wrap the visual aspects?
+
+This would mean that RaceID will still need to pass these RData objects between versions.
