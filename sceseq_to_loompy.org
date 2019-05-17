@@ -1,0 +1,46 @@
+The aim of this notebook to is document the process of creating a SCESeq to Loompy converter
+
+* Motivation
+ + RaceID uses SCESeq as its container format for various matrices and row/column attributes
+ + SCESeq is an R format, and therefore is binary and almost completely opaque to Galaxy
+ + Loompy is an increasingly more adapted standard (ScanPy, SCope, LoomR, etc).
+
+** Why Loom over AnnData
+  + AnnData is also quite populer and is the defacto standard for Scanpy, but it has no web vizualizer, whereas Loom does.
+
+* Format Background
+
+Here we will attempt to create 1:1 mapping between the slots of the SCESeq object and the loom structure
+
+** Mapping
+
+*** /matrix
+ Required.
+ + Maps to :: raw_data (required, NxM)
+*** /layers
+ Optional, but if included each layer must also be NxM of the raw.
+ Each layer can have their own seperate datatypes.
+**** /layers/filtered
+ + Maps to :: getfdata
+ It should be noted that though filtered data would fit nicely into the "/layers" category, the dimensions will likely not be the same, so a NULL character would likely be required to be padded to make this work.
+**** /layers/normalized
+ + Maps to :: ??
+*** /row_attrs
+ Required. All subnames should be tables where the first dimension is of length *N*
+**** /col_attrs/GeneID
+ + Maps to :: rownames
+*** /col_attrs
+ Required. All subnames should be tables where the first dimension is of length *M*
+**** /col_attrs/CellID
+ + Maps to :: colnames
+*** /row_graphs
+There must be 3 1D datasets called a,b,w (int,int,float) as sparse graphs in coordinate list format (e.g. "/row_graphs/test/a" will be type int . Each sub graph must have the same dimensions. 
+These are vertex indices, so an unconnected vertex is one which has no entry in a or b.
+Vertices are zero-based, so all vertices should be in range 0 to N-1
+*** /col_graphs
+As above.
+**** /col_graphs/KNN
+This contains three sublayers (/col_graphs/KNN/a,/col_graphs/KNN/b,/col_graphs/KNN/w) where a = 'from', b = 'to', w = 'edge weight'
+
+
+
