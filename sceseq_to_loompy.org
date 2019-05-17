@@ -12,26 +12,59 @@ The aim of this notebook to is document the process of creating a SCESeq to Loom
 
 Here we will attempt to create 1:1 mapping between the slots of the SCESeq object and the loom structure
 
-** Mapping
+** Notes about RaceID
+
+   #+begin_src R (this is from https://raw.githubusercontent.com/dgrun/RaceID3_StemID2_package/master/R/RaceID.R
+   ## class definition
+
+#' @title The SCseq Class
+#'
+#' @description The SCseq class is the central object storing all information generated during cell type identification with the RaceID3 algorithm.
+#' It comprises a number of slots for a variety of objects.
+#'
+#' @slot expdata The raw expression data matrix with cells as columns and genes as rows in sparse matrix format.
+#' @slot ndata Filtered data with expression normalized to one for each cell.
+#' @slot counts Vector with total transcript counts for each cell in \code{ndata} remaining after filtering.
+#' @slot genes Vector with gene names of all genes in \code{ndata} remaining after filtering.
+#' @slot dimRed list object object storing information on a feature matrix obtained by dimensional reduction, batch effect correction etc.
+#' Component \code{x} stores the actual feature matrix.
+#' @slot distances distance (or dis-similarity) matrix computed by RaceID3.
+#' @slot imputed list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours,
+#' the second matrix contains the probabilities at which each cell contributes to thye imputed gene expression value for the cell correponding to the columns.
+#' @slot tsne data.frame with coordinates of two-dimensional tsne layout computed by RaceID3.
+#' @slot fr data.frame with coordinates of two-dimensional Fruchterman-Rheingold graphlayout computed by RaceID3.
+#' @slot cluster list storing information on the initial clustering step of the RaceID3 algorithm
+#' @slot background list storing the polynomial fit for the background model of gene expression variability computed by RaceID3,
+#' which is used for outlier identification.
+#' @slot out list storing information on outlier cells used for the prediction of rare cell types by RaceID3
+#' @slot cpart vector containing the final clustering (i.e. cell type) partition computed by RaceID3
+#' @slot fcol vector contaning the colour scheme for the RaceID3 clusters
+#' @slot medoids vector containing the cell ids for th cluster medoids
+#' @slot filterpar list containing the parameters used for cell and gene filterung
+#' @slot clusterpar list containing the parameters used for clustering
+#' @slot outlierpar list containing the parameters used for outlier identification
+   #+end_src
+
+** Notes about LoomPy
 
 *** /matrix
  Required.
- + Maps to :: raw_data (required, NxM)
+ + Maps to :: @expdata
 *** /layers
- Optional, but if included each layer must also be NxM of the raw.
+ Optional, but if included each layer must also be NxM of the raw expdata
  Each layer can have their own seperate datatypes.
 **** /layers/filtered
  + Maps to :: getfdata
  It should be noted that though filtered data would fit nicely into the "/layers" category, the dimensions will likely not be the same, so a NULL character would likely be required to be padded to make this work.
 **** /layers/normalized
- + Maps to :: ??
+ + Maps to :: @ndata
 *** /row_attrs
  Required. All subnames should be tables where the first dimension is of length *N*
 **** /col_attrs/GeneID
  + Maps to :: rownames
 *** /col_attrs
  Required. All subnames should be tables where the first dimension is of length *M*
-**** /col_attrs/CellID
+**** /col_attrs/CellID → 
  + Maps to :: colnames
 *** /row_graphs
 There must be 3 1D datasets called a,b,w (int,int,float) as sparse graphs in coordinate list format (e.g. "/row_graphs/test/a" will be type int . Each sub graph must have the same dimensions. 
@@ -42,5 +75,50 @@ As above.
 **** /col_graphs/KNN
 This contains three sublayers (/col_graphs/KNN/a,/col_graphs/KNN/b,/col_graphs/KNN/w) where a = 'from', b = 'to', w = 'edge weight'
 
+** Issues
+
+The filtered matrices, and the some of the slots rely mostly on the ndata. Even getfdata returns the raw expression of the subsetted cells and genes using ndata rownames. Perhaps to keep all the matrices the same, we should set the matrix layer as the getfdata slot and the ndata slot as a normalised layer, with the implicit idea that the pre-filtered matrix is never used again in the analysis for clustering or projection or anything.
+
+* Mapping
+
+This section will be updated as I move through.
+
+** [4/18] To assign:
+ 
++ [X] expdata - The raw expression data matrix with cells as columns and genes as rows in sparse matrix format.
++ [X] ndata - Filtered data with expression normalized to one for each cell.
++ [X] counts - Vector with total transcript counts for each cell in \code{ndata} remaining after filtering.
++ [X] genes - Vector with gene names of all genes in \code{ndata} remaining after filtering.
++ [ ] dimRed - list object object storing information on a feature matrix obtained by dimensional reduction, batch effect correction etc. Component \code{x} stores the actual feature matrix.
++ [ ] distances - distance (or dis-similarity) matrix computed by RaceID3.
++ [ ] imputed - list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours, the second matrix contains the probabilities at which each cell contributes to thye imputed gene expression value for the cell correponding to the columns.
++ [ ] tsne - data.frame with coordinates of two-dimensional tsne layout computed by RaceID3.
++ [ ] fr - data.frame with coordinates of two-dimensional Fruchterman-Rheingold graphlayout computed by RaceID3.
++ [ ] cluster - list storing information on the initial clustering step of the RaceID3 algorithm
++ [ ] background - list storing the polynomial fit for the background model of gene expression variability computed by RaceID3, which is used for outlier identification.
++ [ ] out - list storing information on outlier cells used for the prediction of rare cell types by RaceID3
++ [ ] cpart - vector containing the final clustering (i.e. cell type) partition computed by RaceID3
++ [ ] fcol - vector contaning the colour scheme for the RaceID3 clusters
++ [ ] medoids - vector containing the cell ids for th cluster medoids
++ [ ] filterpar - list containing the parameters used for cell and gene filterung
++ [ ] clusterpar - list containing the parameters used for clustering
++ [ ] outlierpar - list containing the parameters used for outlier identification
 
 
+** Assigned 
+
+ + /matrix :: getfdata()
+ + /layers ::
+   - /layers/normalized :: @ndata
+ + /row_attrs ::
+   - /row_attrs/GeneID :: @genes
+   - /row_attrs :: 
+ + /col_attrs ::
+   - /col_attrs/Counts :: @counts
+   - /col_attrs/CellID :: names(@counts)
+ + /row_graphs ::
+   - /row_
+
+*** /col_graphs
+As above.
+**** /col_graphs/KNN
