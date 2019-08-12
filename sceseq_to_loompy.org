@@ -65,10 +65,10 @@ The aim of this notebook to is document the process of creating a SCESeq to Loom
   + Maps to :: rownames
 **** /col_attrs
   Required. All subnames should be tables where the first dimension is of length *M*
-***** /col_attrs/CellID → 
+***** /col_attrs/CellID →
   + Maps to :: colnames
 **** /row_graphs
- There must be 3 1D datasets called a,b,w (int,int,float) as sparse graphs in coordinate list format (e.g. "/row_graphs/test/a" will be type int . Each sub graph must have the same dimensions. 
+ There must be 3 1D datasets called a,b,w (int,int,float) as sparse graphs in coordinate list format (e.g. "/row_graphs/test/a" will be type int . Each sub graph must have the same dimensions.
  These are vertex indices, so an unconnected vertex is one which has no entry in a or b.
  Vertices are zero-based, so all vertices should be in range 0 to N-1
 **** /col_graphs
@@ -89,7 +89,7 @@ The aim of this notebook to is document the process of creating a SCESeq to Loom
  This section will be updated as I move through.
 
 *** [9/18] To assign:
- 
+
  + [X] expdata - The raw expression data matrix with cells as columns and genes as rows in sparse matrix format.
  + [X] ndata - Filtered data with expression normalized to one for each cell.
  + [X] counts - Vector with total transcript counts for each cell in \code{ndata} remaining after filtering.
@@ -124,7 +124,7 @@ The aim of this notebook to is document the process of creating a SCESeq to Loom
  + [-] *Nope* clusterpar - list containing the parameters used for clustering
  + [-] *Nope* outlierpar - list containing the parameters used for outlier identification
 
-*** Assigned 
+*** Assigned
 
   + /matrix :: getfdata(), NxM
   + /layers ::
@@ -149,10 +149,10 @@ The aim of this notebook to is document the process of creating a SCESeq to Loom
 ** Mapping to AnnData
 
 *** TODO This
-   
+
 ** Experimenting with RData
 
- This is a RaceID object I took from a late stage in the analysis 
+ This is a RaceID object I took from a late stage in the analysis
 
 
    #+begin_src R :session yes  :results output
@@ -256,7 +256,7 @@ Formal class 'Ltree' [package "RaceID"] with 10 slots
   .. .. .. .. .. .. ..$ : chr [1:4] "logW" "E.logW" "gap" "SE.sim"
   .. .. .. .. ..$ n         : int 287
   .. .. .. .. ..$ B         : int 100
-  .. .. .. .. ..$ FUNcluster:function (x, k)  
+  .. .. .. .. ..$ FUNcluster:function (x, k)
   .. .. .. .. ..- attr(*, "class")= chr "clusGap"
   .. .. .. ..$ clb     :List of 31
   .. .. .. .. ..$ result       :List of 7
@@ -386,7 +386,7 @@ Formal class 'Ltree' [package "RaceID"] with 10 slots
   .. .. .. .. .. .. ..- attr(*, "order")= int [1:2] 1 1
   .. .. .. .. .. .. ..- attr(*, "intercept")= int 1
   .. .. .. .. .. .. ..- attr(*, "response")= int 1
-  .. .. .. .. .. .. ..- attr(*, ".Environment")=<environment: 0x5605c74c8d78> 
+  .. .. .. .. .. .. ..- attr(*, ".Environment")=<environment: 0x5605c74c8d78>
   .. .. .. .. .. .. ..- attr(*, "predvars")= language list(vl, ml, I(ml^2))
   .. .. .. .. .. .. ..- attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
   .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
@@ -407,7 +407,7 @@ Formal class 'Ltree' [package "RaceID"] with 10 slots
   .. .. .. .. .. .. .. ..- attr(*, "order")= int [1:2] 1 1
   .. .. .. .. .. .. .. ..- attr(*, "intercept")= int 1
   .. .. .. .. .. .. .. ..- attr(*, "response")= int 1
-  .. .. .. .. .. .. .. ..- attr(*, ".Environment")=<environment: 0x5605c74c8d78> 
+  .. .. .. .. .. .. .. ..- attr(*, ".Environment")=<environment: 0x5605c74c8d78>
   .. .. .. .. .. .. .. ..- attr(*, "predvars")= language list(vl, ml, I(ml^2))
   .. .. .. .. .. .. .. ..- attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
   .. .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
@@ -844,14 +844,14 @@ Formal class 'Ltree' [package "RaceID"] with 10 slots
   ..@ prback :'data.frame':	0 obs. of  0 variables
 Formal class 'data.frame' [package "methods"] with 4 slots
   .. .. ..@ .Data    : list()
-  .. .. ..@ names    : chr(0) 
-  .. .. ..@ row.names: int(0) 
+  .. .. ..@ names    : chr(0)
+  .. .. ..@ row.names: int(0)
   .. .. ..@ .S3Class : chr "data.frame"
   ..@ prbacka:'data.frame':	0 obs. of  0 variables
 Formal class 'data.frame' [package "methods"] with 4 slots
   .. .. ..@ .Data    : list()
-  .. .. ..@ names    : chr(0) 
-  .. .. ..@ row.names: int(0) 
+  .. .. ..@ names    : chr(0)
+  .. .. ..@ row.names: int(0)
   .. .. ..@ .S3Class : chr "data.frame"
   ..@ ltcoord: num [1:278, 1:2] 1.744 -0.897 0.407 1.924 1.831 ...
   .. ..- attr(*, "dimnames")=List of 2
@@ -1073,7 +1073,7 @@ Let's summarise the above
              - : chr [1:4] "logW" "E.logW" "gap" "SE.sim"
          - n         : int 287
          - B         : int 100
-         - FUNcluster:function (x, k)  
+         - FUNcluster:function (x, k)
          - attr(*, "class")= chr "clusGap"
        - clb     :List of 31
          - result       :List of 7
@@ -1203,7 +1203,7 @@ Let's summarise the above
            - attr(*, "order")= int [1:2] 1 1
            - attr(*, "intercept")= int 1
            - attr(*, "response")= int 1
-           - attr(*, ".Environment")=<environment: 0x5605c74c8d78> 
+           - attr(*, ".Environment")=<environment: 0x5605c74c8d78>
            - attr(*, "predvars")= language list(vl, ml, I(ml^2))
            - attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
              - attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
@@ -1224,7 +1224,7 @@ Let's summarise the above
              - attr(*, "order")= int [1:2] 1 1
              - attr(*, "intercept")= int 1
              - attr(*, "response")= int 1
-             - attr(*, ".Environment")=<environment: 0x5605c74c8d78> 
+             - attr(*, ".Environment")=<environment: 0x5605c74c8d78>
              - attr(*, "predvars")= language list(vl, ml, I(ml^2))
              - attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
                - attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
@@ -1660,13 +1660,13 @@ Let's summarise the above
      - [ ] pthr   : num 0.01
   6) [0/4] prback :'data.frame': 0 obs. of  0 variables with 4 slots
      - [ ] .Data    : list()
-     - [ ] names    : chr(0) 
-     - [ ] row.names: int(0) 
+     - [ ] names    : chr(0)
+     - [ ] row.names: int(0)
      - [ ] .S3Class : chr "data.frame"
   7) [0/4] prbacka:'data.frame':	0 obs. of  0 variables Formal with 4 slots
      - [ ] .Data    : list()
-     - [ ] names    : chr(0) 
-     - [ ] row.names: int(0) 
+     - [ ] names    : chr(0)
+     - [ ] row.names: int(0)
      - [ ] .S3Class : chr "data.frame"
   8) [ ] ltcoord: num [1:278, 1:2] 1.744 -0.897 0.407 1.924 1.831  .
      - attr(*, "dimnames")=List of 2
@@ -1847,9 +1847,6 @@ Let's summarise the above
 
   readRDS = robjects.r['readRDS']
   sce = readRDS('~/Downloads/lineagestemid.rds')
-
-
-
 
 
 #+end_src
