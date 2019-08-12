@@ -1,201 +1,1855 @@
 The aim of this notebook to is document the process of creating a SCESeq to Loompy or AnnData converter
 
-* Motivation
- + RaceID uses SCESeq as its container format for various matrices and row/column attributes
- + SCESeq is an R format, and therefore is binary and almost completely opaque to Galaxy
- + Loompy is an increasingly more adapted standard (ScanPy, SCope, LoomR, etc).
+* Initial Stab
+** Motivation
+  + RaceID uses SCESeq as its container format for various matrices and row/column attributes
+  + SCESeq is an R format, and therefore is binary and almost completely opaque to Galaxy
+  + Loompy is an increasingly more adapted standard (ScanPy, SCope, LoomR, etc).
 
-** Why AnnData over Loom
-  + AnnData has a visualiser in Galaxy ([[https://github.com/galaxyproject/galaxy/tree/dev/config/plugins/interactive_environments/cellxgene][cellxgene]])
+*** Why AnnData over Loom
+   + AnnData has a visualiser in Galaxy ([[https://github.com/galaxyproject/galaxy/tree/dev/config/plugins/interactive_environments/cellxgene][cellxgene]])
 
-* Format Background
+** Format Background
 
-Here we will attempt to create 1:1 mapping between the slots of the SCESeq object and the loom structure
+ Here we will attempt to create 1:1 mapping between the slots of the SCESeq object and the loom structure
 
-** Notes about RaceID
+*** Notes about RaceID
 
-   #+begin_src R (this is from https://raw.githubusercontent.com/dgrun/RaceID3_StemID2_package/master/R/RaceID.R
-   ## class definition
+    #+begin_src R (this is from https://raw.githubusercontent.com/dgrun/RaceID3_StemID2_package/master/R/RaceID.R
+    ## class definition
 
-#' @title The SCseq Class
-#'
-#' @description The SCseq class is the central object storing all information generated during cell type identification with the RaceID3 algorithm.
-#' It comprises a number of slots for a variety of objects.
-#'
-#' @slot expdata The raw expression data matrix with cells as columns and genes as rows in sparse matrix format.
-#' @slot ndata Filtered data with expression normalized to one for each cell.
-#' @slot counts Vector with total transcript counts for each cell in \code{ndata} remaining after filtering.
-#' @slot genes Vector with gene names of all genes in \code{ndata} remaining after filtering.
-#' @slot dimRed list object object storing information on a feature matrix obtained by dimensional reduction, batch effect correction etc.
-#' Component \code{x} stores the actual feature matrix.
-#' @slot distances distance (or dis-similarity) matrix computed by RaceID3.
-#' @slot imputed list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours,
-#' the second matrix contains the probabilities at which each cell contributes to thye imputed gene expression value for the cell correponding to the columns.
-#' @slot tsne data.frame with coordinates of two-dimensional tsne layout computed by RaceID3.
-#' @slot fr data.frame with coordinates of two-dimensional Fruchterman-Rheingold graphlayout computed by RaceID3.
-#' @slot cluster list storing information on the initial clustering step of the RaceID3 algorithm
-#' @slot background list storing the polynomial fit for the background model of gene expression variability computed by RaceID3,
-#' which is used for outlier identification.
-#' @slot out list storing information on outlier cells used for the prediction of rare cell types by RaceID3
-#' @slot cpart vector containing the final clustering (i.e. cell type) partition computed by RaceID3
-#' @slot fcol vector contaning the colour scheme for the RaceID3 clusters
-#' @slot medoids vector containing the cell ids for th cluster medoids
-#' @slot filterpar list containing the parameters used for cell and gene filterung
-#' @slot clusterpar list containing the parameters used for clustering
-#' @slot outlierpar list containing the parameters used for outlier identification
+ #' @title The SCseq Class
+ #'
+ #' @description The SCseq class is the central object storing all information generated during cell type identification with the RaceID3 algorithm.
+ #' It comprises a number of slots for a variety of objects.
+ #'
+ #' @slot expdata The raw expression data matrix with cells as columns and genes as rows in sparse matrix format.
+ #' @slot ndata Filtered data with expression normalized to one for each cell.
+ #' @slot counts Vector with total transcript counts for each cell in \code{ndata} remaining after filtering.
+ #' @slot genes Vector with gene names of all genes in \code{ndata} remaining after filtering.
+ #' @slot dimRed list object object storing information on a feature matrix obtained by dimensional reduction, batch effect correction etc.
+ #' Component \code{x} stores the actual feature matrix.
+ #' @slot distances distance (or dis-similarity) matrix computed by RaceID3.
+ #' @slot imputed list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours,
+ #' the second matrix contains the probabilities at which each cell contributes to thye imputed gene expression value for the cell correponding to the columns.
+ #' @slot tsne data.frame with coordinates of two-dimensional tsne layout computed by RaceID3.
+ #' @slot fr data.frame with coordinates of two-dimensional Fruchterman-Rheingold graphlayout computed by RaceID3.
+ #' @slot cluster list storing information on the initial clustering step of the RaceID3 algorithm
+ #' @slot background list storing the polynomial fit for the background model of gene expression variability computed by RaceID3,
+ #' which is used for outlier identification.
+ #' @slot out list storing information on outlier cells used for the prediction of rare cell types by RaceID3
+ #' @slot cpart vector containing the final clustering (i.e. cell type) partition computed by RaceID3
+ #' @slot fcol vector contaning the colour scheme for the RaceID3 clusters
+ #' @slot medoids vector containing the cell ids for th cluster medoids
+ #' @slot filterpar list containing the parameters used for cell and gene filterung
+ #' @slot clusterpar list containing the parameters used for clustering
+ #' @slot outlierpar list containing the parameters used for outlier identification
+    #+end_src
+
+*** Notes about LoomPy
+
+**** /matrix
+  Required.
+  + Maps to :: @expdata
+**** /layers
+  Optional, but if included each layer must also be NxM of the raw expdata
+  Each layer can have their own seperate datatypes.
+***** /layers/filtered
+  + Maps to :: getfdata
+  It should be noted that though filtered data would fit nicely into the "/layers" category, the dimensions will likely not be the same, so a NULL character would likely be required to be padded to make this work.
+***** /layers/normalized
+  + Maps to :: @ndata
+**** /row_attrs
+  Required. All subnames should be tables where the first dimension is of length *N*
+***** /col_attrs/GeneID
+  + Maps to :: rownames
+**** /col_attrs
+  Required. All subnames should be tables where the first dimension is of length *M*
+***** /col_attrs/CellID → 
+  + Maps to :: colnames
+**** /row_graphs
+ There must be 3 1D datasets called a,b,w (int,int,float) as sparse graphs in coordinate list format (e.g. "/row_graphs/test/a" will be type int . Each sub graph must have the same dimensions. 
+ These are vertex indices, so an unconnected vertex is one which has no entry in a or b.
+ Vertices are zero-based, so all vertices should be in range 0 to N-1
+**** /col_graphs
+ As above.
+***** /col_graphs/KNN
+ This contains three sublayers (/col_graphs/KNN/a,/col_graphs/KNN/b,/col_graphs/KNN/w) where a = 'from', b = 'to', w = 'edge weight'
+
+**** Issues
+  The filtered matrices, and the some of the slots rely mostly on the ndata. Even getfdata returns the raw expression of the subsetted cells and genes using ndata rownames. Perhaps to keep all the matrices the same, we should set the matrix layer as the getfdata slot and the ndata slot as a normalised layer, with the implicit idea that the pre-filtered matrix is never used again in the analysis for clustering or projection or anything.
+
+
+*** TODO Notes about AnnData
+
+ AnnData can take data that doesn't quite fit the dimensions of the regular data via "uns"
+
+** Mapping to Loompy
+
+ This section will be updated as I move through.
+
+*** [9/18] To assign:
+ 
+ + [X] expdata - The raw expression data matrix with cells as columns and genes as rows in sparse matrix format.
+ + [X] ndata - Filtered data with expression normalized to one for each cell.
+ + [X] counts - Vector with total transcript counts for each cell in \code{ndata} remaining after filtering.
+ + [X] genes - Vector with gene names of all genes in \code{ndata} remaining after filtering.
+ + [ ] dimRed - list object object storing information on a feature matrix obtained by dimensional reduction, batch effect correction etc. Component \code{x} stores the actual feature matrix.
+   - [ ] ICA (icafast package)
+     - [ ] S,Y - [1:500, 1:M-1]
+     - [ ] W,Q,R - [1:M-1, 1:M]
+     - [ ] M - [1:M, 1:M-1]
+     - [ ] vafs - [1:M-1]
+     - [ ] iter (int)
+
+   - [ ] PCA (irlba package for matrix decomposition)
+     - [ ] d - [1:M] max(nu,nv)
+     - [ ] u - [1:M, 1:M-1] nu left vectors
+     - [ ] v - [1:500, 1:M-1] ]nv right vectors  (can't use these...)
+     - [ ] iter (int)
+     - [ ] mprod
+ + [X] distances - distance (or dis-similarity) matrix computed by RaceID3.
+ + [X] imputed - list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours, the second matrix contains the probabilities at which each cell contributes to the imputed gene expression value for the cell correponding to the columns.
+ + [ ] tsne - data.frame with coordinates of two-dimensional tsne layout computed by RaceID3.
+ + [ ] fr - data.frame with coordinates of two-dimensional Fruchterman-Rheingold graphlayout computed by RaceID3.
+ + [X] cluster - list storing information on the initial clustering step of the RaceID3 algorithm
+   - [X] kpart (1xM) of assignments to the N clusters.
+ + [-] *Nope* background - list storing the polynomial fit for the background model of gene expression variability computed by RaceID3, which is used for outlier identification.
+ + [X] out - list storing information on outlier cells used for the prediction of rare cell types by RaceID3
+   - [X] cprobs -- all the others don't have fitting dimensions
+ + [X] cpart - vector containing the final clustering (i.e. cell type) partition computed by RaceID3
+ + [-] *Nope* fcol - vector contaning the colour scheme for the RaceID3 clusters
+ + [-] *Nope* medoids - vector containing the cell ids for th cluster medoids
+ + [-] *Nope* filterpar - list containing the parameters used for cell and gene filterung
+ + [-] *Nope* clusterpar - list containing the parameters used for clustering
+ + [-] *Nope* outlierpar - list containing the parameters used for outlier identification
+
+*** Assigned 
+
+  + /matrix :: getfdata(), NxM
+  + /layers ::
+    - /layers/normalized :: @ndata, NxM
+  + /row_attrs :: (N attrs)
+    - /row_attrs/GeneID :: @genes, Nx1
+    - /row_attrs/DimRed :: @dimred$x , NxN
+  + /col_attrs :: (M attrs)
+    - /col_attrs/CellID :: names(@counts), 1xM
+    - /col_attrs/Counts :: @counts, 1xM
+    - /col_attrs/distances :: @distances, MxM
+    - /col_attrs/CProbs :: @out$cprobs
+    - /col_attrs/ClusterInitial :: @cluster$kpart, 1xM
+    - /col_attrs/ClusterFinal :: @cpart, 1xM
+    - /col_attrs/imputedRefCell :: @imputed$nn, kxM (but these are indices, so change these to actual strings for each k neighbor of the cell)
+    - /col_attrs/imputedRefProbs :: @imputed$probs, kxM
+  + /row_graphs ::
+
+  + /col_graphs ::
+    - /col_graphs/KNN ::
+
+** Mapping to AnnData
+
+*** TODO This
+   
+** Experimenting with RData
+
+ This is a RaceID object I took from a late stage in the analysis 
+
+
+   #+begin_src R :session yes  :results output
+     library(RaceID)
+     tab <- readRDS('test.rdata')@sc
+     str(tab, max.level = 2)
    #+end_src
 
-** Notes about LoomPy
+   #+RESULTS:
+   #+begin_example
 
-*** /matrix
- Required.
- + Maps to :: @expdata
-*** /layers
- Optional, but if included each layer must also be NxM of the raw expdata
- Each layer can have their own seperate datatypes.
-**** /layers/filtered
- + Maps to :: getfdata
- It should be noted that though filtered data would fit nicely into the "/layers" category, the dimensions will likely not be the same, so a NULL character would likely be required to be padded to make this work.
-**** /layers/normalized
- + Maps to :: @ndata
-*** /row_attrs
- Required. All subnames should be tables where the first dimension is of length *N*
-**** /col_attrs/GeneID
- + Maps to :: rownames
-*** /col_attrs
- Required. All subnames should be tables where the first dimension is of length *M*
-**** /col_attrs/CellID → 
- + Maps to :: colnames
-*** /row_graphs
-There must be 3 1D datasets called a,b,w (int,int,float) as sparse graphs in coordinate list format (e.g. "/row_graphs/test/a" will be type int . Each sub graph must have the same dimensions. 
-These are vertex indices, so an unconnected vertex is one which has no entry in a or b.
-Vertices are zero-based, so all vertices should be in range 0 to N-1
-*** /col_graphs
-As above.
-**** /col_graphs/KNN
-This contains three sublayers (/col_graphs/KNN/a,/col_graphs/KNN/b,/col_graphs/KNN/w) where a = 'from', b = 'to', w = 'edge weight'
+   Formal class 'SCseq' [package "RaceID"] with 18 slots
+     ..@ expdata   :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+     ..@ ndata     :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+     ..@ counts    : Named num [1:287] 5697 11803 14142 3801 3763 ...
+     .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+     ..@ genes     : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+     ..@ dimRed    : list()
+     ..@ distances : num [1:287, 1:287] 0 0.358 0.201 0.232 0.457 ...
+     .. ..- attr(*, "dimnames")=List of 2
+     ..@ imputed   : list()
+     ..@ tsne      :'data.frame':	287 obs. of  2 variables:
+     ..@ fr        :'data.frame':	287 obs. of  2 variables:
+     ..@ cluster   :List of 5
+     ..@ background:List of 1
+     ..@ out       :List of 5
+     ..@ cpart     : Named int [1:287] 1 2 3 1 4 3 4 3 3 5 ...
+     .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+     ..@ medoids   : chr [1:14] "II5d_52" "II5d_61" "II5d_56" "I5d_52" ...
+     ..@ fcol      : chr [1:14] "#0024FFFF" "#00FF92FF" "#B600FFFF" "#00FF24FF" ...
+     ..@ filterpar :List of 7
+     ..@ clusterpar:List of 9
+     ..@ outlierpar:List of 4
+   #+end_example
 
-*** Issues
- The filtered matrices, and the some of the slots rely mostly on the ndata. Even getfdata returns the raw expression of the subsetted cells and genes using ndata rownames. Perhaps to keep all the matrices the same, we should set the matrix layer as the getfdata slot and the ndata slot as a normalised layer, with the implicit idea that the pre-filtered matrix is never used again in the analysis for clustering or projection or anything.
+** Questions
 
-
-** TODO Notes about AnnData
-
-AnnData can take data that doesn't quite fit the dimensions of the regular data via "uns"
-
-* Mapping to Loompy
-
-This section will be updated as I move through.
-
-** [9/18] To assign:
- 
-+ [X] expdata - The raw expression data matrix with cells as columns and genes as rows in sparse matrix format.
-+ [X] ndata - Filtered data with expression normalized to one for each cell.
-+ [X] counts - Vector with total transcript counts for each cell in \code{ndata} remaining after filtering.
-+ [X] genes - Vector with gene names of all genes in \code{ndata} remaining after filtering.
-+ [ ] dimRed - list object object storing information on a feature matrix obtained by dimensional reduction, batch effect correction etc. Component \code{x} stores the actual feature matrix.
-  - [ ] ICA (icafast package)
-    - [ ] S,Y - [1:500, 1:M-1]
-    - [ ] W,Q,R - [1:M-1, 1:M]
-    - [ ] M - [1:M, 1:M-1]
-    - [ ] vafs - [1:M-1]
-    - [ ] iter (int)
-
-  - [ ] PCA (irlba package for matrix decomposition)
-    - [ ] d - [1:M] max(nu,nv)
-    - [ ] u - [1:M, 1:M-1] nu left vectors
-    - [ ] v - [1:500, 1:M-1] ]nv right vectors  (can't use these...)
-    - [ ] iter (int)
-    - [ ] mprod
-+ [X] distances - distance (or dis-similarity) matrix computed by RaceID3.
-+ [X] imputed - list with two matrices computed for imputing gene expression. The first matrix \code{nn} contains the cell indices of the \code{knn} nearest neighbours, the second matrix contains the probabilities at which each cell contributes to the imputed gene expression value for the cell correponding to the columns.
-+ [ ] tsne - data.frame with coordinates of two-dimensional tsne layout computed by RaceID3.
-+ [ ] fr - data.frame with coordinates of two-dimensional Fruchterman-Rheingold graphlayout computed by RaceID3.
-+ [X] cluster - list storing information on the initial clustering step of the RaceID3 algorithm
-  - [X] kpart (1xM) of assignments to the N clusters.
-+ [-] *Nope* background - list storing the polynomial fit for the background model of gene expression variability computed by RaceID3, which is used for outlier identification.
-+ [X] out - list storing information on outlier cells used for the prediction of rare cell types by RaceID3
-  - [X] cprobs -- all the others don't have fitting dimensions
-+ [X] cpart - vector containing the final clustering (i.e. cell type) partition computed by RaceID3
-+ [-] *Nope* fcol - vector contaning the colour scheme for the RaceID3 clusters
-+ [-] *Nope* medoids - vector containing the cell ids for th cluster medoids
-+ [-] *Nope* filterpar - list containing the parameters used for cell and gene filterung
-+ [-] *Nope* clusterpar - list containing the parameters used for clustering
-+ [-] *Nope* outlierpar - list containing the parameters used for outlier identification
-
-** Assigned 
-
- + /matrix :: getfdata(), NxM
- + /layers ::
-   - /layers/normalized :: @ndata, NxM
- + /row_attrs :: (N attrs)
-   - /row_attrs/GeneID :: @genes, Nx1
-   - /row_attrs/DimRed :: @dimred$x , NxN
- + /col_attrs :: (M attrs)
-   - /col_attrs/CellID :: names(@counts), 1xM
-   - /col_attrs/Counts :: @counts, 1xM
-   - /col_attrs/distances :: @distances, MxM
-   - /col_attrs/CProbs :: @out$cprobs
-   - /col_attrs/ClusterInitial :: @cluster$kpart, 1xM
-   - /col_attrs/ClusterFinal :: @cpart, 1xM
-   - /col_attrs/imputedRefCell :: @imputed$nn, kxM (but these are indices, so change these to actual strings for each k neighbor of the cell)
-   - /col_attrs/imputedRefProbs :: @imputed$probs, kxM
- + /row_graphs ::
-
- + /col_graphs ::
-   - /col_graphs/KNN ::
+*** Is this going to be a True wrapper?
+  + i.e. is every variable going to be completely absorbed into the AnnData?
+  + If so, then I would need to run a converted/deconverter between every wrapper
 
 
+*** Should I only wrap the visual aspects?
 
-* Mapping to AnnData
+ This would mean that RaceID will still need to pass these RData objects between versions.
 
-** TODO This
+* Second Stab
 
-* Experimenting with RData
+AnnData is the game.
 
-This is a RaceID object I took from a late stage in the analysis 
+#+begin_src R :results output
+  tab <- readRDS('~/Downloads/lineagestemid.rds')
+  str(tab)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Formal class 'Ltree' [package "RaceID"] with 10 slots
+  ..@ sc     :Formal class 'SCseq' [package "RaceID"] with 18 slots
+  .. .. ..@ expdata   :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+  .. .. .. .. ..@ i       : int [1:961619] 30 101 116 127 151 171 183 234 248 344 ...
+  .. .. .. .. ..@ p       : int [1:432] 0 534 2832 6603 6666 10692 11984 13808 15517 20386 ...
+  .. .. .. .. ..@ Dim     : int [1:2] 20268 431
+  .. .. .. .. ..@ Dimnames:List of 2
+  .. .. .. .. .. ..$ : chr [1:20268] "1700047I17Rik2" "2610044O15Rik8" "2810047C21Rik1" "9930111J21Rik1" ...
+  .. .. .. .. .. ..$ : chr [1:431] "I5d_2" "I5d_3" "I5d_4" "I5d_5" ...
+  .. .. .. .. ..@ x       : num [1:961619] 1 1 1 1 1 ...
+  .. .. .. .. ..@ factors : list()
+  .. .. ..@ ndata     :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+  .. .. .. .. ..@ i       : int [1:876212] 16 26 30 35 37 38 44 77 91 102 ...
+  .. .. .. .. ..@ p       : int [1:288] 0 2298 6069 10095 11919 13628 18497 21411 25265 28324 ...
+  .. .. .. .. ..@ Dim     : int [1:2] 20268 287
+  .. .. .. .. ..@ Dimnames:List of 2
+  .. .. .. .. .. ..$ : chr [1:20268] "1700047I17Rik2" "2610044O15Rik8" "2810047C21Rik1" "9930111J21Rik1" ...
+  .. .. .. .. .. ..$ : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. ..@ x       : num [1:876212] 0.000176 0.000176 0.000886 0.000176 0.000886 ...
+  .. .. .. .. ..@ factors : list()
+  .. .. ..@ counts    : Named num [1:287] 5697 11803 14142 3801 3763 ...
+  .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. ..@ genes     : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+  .. .. ..@ dimRed    : list()
+  .. .. ..@ distances : num [1:287, 1:287] 0 0.358 0.201 0.232 0.457 ...
+  .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. ..$ : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. ..$ : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. ..@ imputed   : list()
+  .. .. ..@ tsne      :'data.frame':	287 obs. of  2 variables:
+  .. .. .. ..$ V1: num [1:287] 1.633 -0.147 0.259 1.538 2.956 ...
+  .. .. .. ..$ V2: num [1:287] 9.722 0.917 6.539 11.574 -1.691 ...
+  .. .. ..@ fr        :'data.frame':	287 obs. of  2 variables:
+  .. .. .. ..$ V1: num [1:287] -2.775 4.49 0.967 -4.075 4.585 ...
+  .. .. .. ..$ V2: num [1:287] -3.911 -3.383 -4.635 -5.193 -0.448 ...
+  .. .. ..@ cluster   :List of 5
+  .. .. .. ..$ kpart   : Named int [1:287] 1 2 3 1 4 3 4 3 3 5 ...
+  .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. ..$ jaccard : num [1:12] 0.574 0.666 0.539 0.772 0.303 ...
+  .. .. .. ..$ gap     :List of 4
+  .. .. .. .. ..$ Tab       : num [1:30, 1:4] 4.43 4.26 4.18 4.04 3.93 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : NULL
+  .. .. .. .. .. .. ..$ : chr [1:4] "logW" "E.logW" "gap" "SE.sim"
+  .. .. .. .. ..$ n         : int 287
+  .. .. .. .. ..$ B         : int 100
+  .. .. .. .. ..$ FUNcluster:function (x, k)  
+  .. .. .. .. ..- attr(*, "class")= chr "clusGap"
+  .. .. .. ..$ clb     :List of 31
+  .. .. .. .. ..$ result       :List of 7
+  .. .. .. .. .. ..$ result       :List of 3
+  .. .. .. .. .. .. ..$ pamobject:List of 9
+  .. .. .. .. .. .. .. ..$ medoids   : chr [1:12] "II5d_52" "II5d_61" "II5d_56" "I5d_52" ...
+  .. .. .. .. .. .. .. ..$ id.med    : int [1:12] 110 119 114 40 250 137 276 252 192 35 ...
+  .. .. .. .. .. .. .. ..$ clustering: Named int [1:287] 1 2 3 1 4 3 4 3 3 5 ...
+  .. .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. .. ..$ objective : Named num [1:2] 0.209 0.201
+  .. .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:2] "build" "swap"
+  .. .. .. .. .. .. .. ..$ isolation : Factor w/ 3 levels "no","L","L*": 1 1 1 1 1 1 3 1 1 1 ...
+  .. .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:12] "1" "2" "3" "4" ...
+  .. .. .. .. .. .. .. ..$ clusinfo  : num [1:12, 1:5] 16 40 64 36 25 15 5 25 11 10 ...
+  .. .. .. .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. .. .. .. ..$ : NULL
+  .. .. .. .. .. .. .. .. .. ..$ : chr [1:5] "size" "max_diss" "av_diss" "diameter" ...
+  .. .. .. .. .. .. .. ..$ silinfo   :List of 3
+  .. .. .. .. .. .. .. .. ..$ widths         : num [1:287, 1:3] 1 1 1 1 1 1 1 1 1 1 ...
+  .. .. .. .. .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. .. .. .. .. ..$ : chr [1:287] "III5d_54" "II5d_52" "I5d_8" "V5d_19" ...
+  .. .. .. .. .. .. .. .. .. .. ..$ : chr [1:3] "cluster" "neighbor" "sil_width"
+  .. .. .. .. .. .. .. .. ..$ clus.avg.widths: num [1:12] 0.1676 0.1226 0.0581 0.0929 0.1389 ...
+  .. .. .. .. .. .. .. .. ..$ avg.width      : num 0.199
+  .. .. .. .. .. .. .. ..$ diss      : NULL
+  .. .. .. .. .. .. .. ..$ call      : language cluster::pam(x = as.dist(sdata), k = k, diss = TRUE)
+  .. .. .. .. .. .. .. ..- attr(*, "class")= chr [1:2] "pam" "partition"
+  .. .. .. .. .. .. ..$ nc       : num 12
+  .. .. .. .. .. .. ..$ crit     : num [1:12] 0 0 0 0 0 0 0 0 0 0 ...
+  .. .. .. .. .. ..$ nc           : num 12
+  .. .. .. .. .. ..$ clusterlist  :List of 12
+  .. .. .. .. .. .. ..$ : Named logi [1:287] TRUE FALSE FALSE TRUE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE TRUE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE TRUE FALSE FALSE TRUE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE TRUE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. .. ..$ : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE ...
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. ..$ partition    : Named int [1:287] 1 2 3 1 4 3 4 3 3 5 ...
+  .. .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. .. ..$ clustermethod: chr "pam/estimated k"
+  .. .. .. .. .. ..$ criterion    : chr "asw"
+  .. .. .. .. .. ..$ nccl         : num 12
+  .. .. .. .. ..$ partition    : Named int [1:287] 1 2 3 1 4 3 4 3 3 5 ...
+  .. .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. .. ..$ nc           : num 12
+  .. .. .. .. ..$ nccl         : num 12
+  .. .. .. .. ..$ clustermethod: chr "pam/estimated k"
+  .. .. .. .. ..$ B            : num 50
+  .. .. .. .. ..$ noisemethod  : logi FALSE
+  .. .. .. .. ..$ bootmethod   : chr "boot"
+  .. .. .. .. ..$ multipleboot : logi FALSE
+  .. .. .. .. ..$ dissolution  : num 0.5
+  .. .. .. .. ..$ recover      : num 0.75
+  .. .. .. .. ..$ bootresult   : num [1:12, 1:50] 1 0.667 0.396 0.833 0.269 ...
+  .. .. .. .. ..$ bootmean     : num [1:12] 0.574 0.666 0.539 0.772 0.303 ...
+  .. .. .. .. ..$ bootbrd      : int [1:12] 20 10 23 3 44 0 0 34 29 13 ...
+  .. .. .. .. ..$ bootrecover  : int [1:12] 18 17 3 31 1 48 50 7 10 25 ...
+  .. .. .. .. ..$ jitterresult : NULL
+  .. .. .. .. ..$ jittermean   : NULL
+  .. .. .. .. ..$ jitterbrd    : NULL
+  .. .. .. .. ..$ jitterrecover: NULL
+  .. .. .. .. ..$ subsetresult : NULL
+  .. .. .. .. ..$ subsetmean   : NULL
+  .. .. .. .. ..$ subsetbrd    : NULL
+  .. .. .. .. ..$ subsetrecover: NULL
+  .. .. .. .. ..$ bojitresult  : NULL
+  .. .. .. .. ..$ bojitmean    : NULL
+  .. .. .. .. ..$ bojitbrd     : NULL
+  .. .. .. .. ..$ bojitrecover : NULL
+  .. .. .. .. ..$ noiseresult  : NULL
+  .. .. .. .. ..$ noisemean    : NULL
+  .. .. .. .. ..$ noisebrd     : NULL
+  .. .. .. .. ..$ noiserecover : NULL
+  .. .. .. .. ..- attr(*, "class")= chr "clboot"
+  .. .. .. ..$ features: chr [1:500] "Aadac" "Abcd3" "Abhd17a" "Abp1" ...
+  .. .. ..@ background:List of 1
+  .. .. .. ..$ vfit:List of 12
+  .. .. .. .. ..$ coefficients : Named num [1:3] 1.12 1.2 0.11
+  .. .. .. .. .. ..- attr(*, "names")= chr [1:3] "(Intercept)" "ml" "I(ml^2)"
+  .. .. .. .. ..$ residuals    : Named num [1:2089] 0.0673 -0.2633 -0.0872 -0.7967 -0.3425 ...
+  .. .. .. .. .. ..- attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+  .. .. .. .. ..$ effects      : Named num [1:2089] -116.863 97.874 12.996 -0.795 -0.341 ...
+  .. .. .. .. .. ..- attr(*, "names")= chr [1:2089] "(Intercept)" "ml" "I(ml^2)" "" ...
+  .. .. .. .. ..$ rank         : int 3
+  .. .. .. .. ..$ fitted.values: Named num [1:2089] 2.32 1.67 1.51 1.26 1.46 ...
+  .. .. .. .. .. ..- attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+  .. .. .. .. ..$ assign       : int [1:3] 0 1 2
+  .. .. .. .. ..$ qr           :List of 5
+  .. .. .. .. .. ..$ qr   : num [1:2089, 1:3] -45.7056 0.0219 0.0219 0.0219 0.0219 ...
+  .. .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. .. ..$ : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+  .. .. .. .. .. .. .. ..$ : chr [1:3] "(Intercept)" "ml" "I(ml^2)"
+  .. .. .. .. .. .. ..- attr(*, "assign")= int [1:3] 0 1 2
+  .. .. .. .. .. ..$ qraux: num [1:3] 1.02 1.01 1
+  .. .. .. .. .. ..$ pivot: int [1:3] 1 2 3
+  .. .. .. .. .. ..$ tol  : num 1e-07
+  .. .. .. .. .. ..$ rank : int 3
+  .. .. .. .. .. ..- attr(*, "class")= chr "qr"
+  .. .. .. .. ..$ df.residual  : int 2086
+  .. .. .. .. ..$ xlevels      : Named list()
+  .. .. .. .. ..$ call         : language lm(formula = vl ~ ml + I(ml^2))
+  .. .. .. .. ..$ terms        :Classes 'terms', 'formula'  language vl ~ ml + I(ml^2)
+  .. .. .. .. .. .. ..- attr(*, "variables")= language list(vl, ml, I(ml^2))
+  .. .. .. .. .. .. ..- attr(*, "factors")= int [1:3, 1:2] 0 1 0 0 0 1
+  .. .. .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. .. .. ..$ : chr [1:3] "vl" "ml" "I(ml^2)"
+  .. .. .. .. .. .. .. .. ..$ : chr [1:2] "ml" "I(ml^2)"
+  .. .. .. .. .. .. ..- attr(*, "term.labels")= chr [1:2] "ml" "I(ml^2)"
+  .. .. .. .. .. .. ..- attr(*, "order")= int [1:2] 1 1
+  .. .. .. .. .. .. ..- attr(*, "intercept")= int 1
+  .. .. .. .. .. .. ..- attr(*, "response")= int 1
+  .. .. .. .. .. .. ..- attr(*, ".Environment")=<environment: 0x5605c74c8d78> 
+  .. .. .. .. .. .. ..- attr(*, "predvars")= language list(vl, ml, I(ml^2))
+  .. .. .. .. .. .. ..- attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
+  .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
+  .. .. .. .. ..$ model        :'data.frame':	2089 obs. of  3 variables:
+  .. .. .. .. .. ..$ vl     : Named num [1:2089] 2.385 1.41 1.422 0.459 1.118 ...
+  .. .. .. .. .. .. ..- attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+  .. .. .. .. .. ..$ ml     : Named num [1:2089] 0.92 0.441 0.312 0.108 0.274 ...
+  .. .. .. .. .. .. ..- attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+  .. .. .. .. .. ..$ I(ml^2): 'AsIs' Named num [1:2089] 0.845632.... 0.194108.... 0.097482.... 0.011769.... 0.075060.... ...
+  .. .. .. .. .. .. ..- attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
+  .. .. .. .. .. ..- attr(*, "terms")=Classes 'terms', 'formula'  language vl ~ ml + I(ml^2)
+  .. .. .. .. .. .. .. ..- attr(*, "variables")= language list(vl, ml, I(ml^2))
+  .. .. .. .. .. .. .. ..- attr(*, "factors")= int [1:3, 1:2] 0 1 0 0 0 1
+  .. .. .. .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. .. .. .. ..$ : chr [1:3] "vl" "ml" "I(ml^2)"
+  .. .. .. .. .. .. .. .. .. ..$ : chr [1:2] "ml" "I(ml^2)"
+  .. .. .. .. .. .. .. ..- attr(*, "term.labels")= chr [1:2] "ml" "I(ml^2)"
+  .. .. .. .. .. .. .. ..- attr(*, "order")= int [1:2] 1 1
+  .. .. .. .. .. .. .. ..- attr(*, "intercept")= int 1
+  .. .. .. .. .. .. .. ..- attr(*, "response")= int 1
+  .. .. .. .. .. .. .. ..- attr(*, ".Environment")=<environment: 0x5605c74c8d78> 
+  .. .. .. .. .. .. .. ..- attr(*, "predvars")= language list(vl, ml, I(ml^2))
+  .. .. .. .. .. .. .. ..- attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
+  .. .. .. .. .. .. .. .. ..- attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
+  .. .. .. .. ..- attr(*, "class")= chr "lm"
+  .. .. ..@ out       :List of 5
+  .. .. .. ..$ out    : chr [1:4] "I5d_45" "I5d_78" "IV5d_33" "V5d_90"
+  .. .. .. ..$ stest  : num [1:40] 287 36 20 13 11 8 7 5 4 4 ...
+  .. .. .. ..$ thr    : num [1:40] 0.5 0.25 0.125 0.0625 0.0312 ...
+  .. .. .. ..$ cprobs : Named num [1:287] 0.49984 0.49882 0.47232 0.49995 0.00243 ...
+  .. .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_8" "I5d_39" "I5d_43" ...
+  .. .. .. ..$ outgene:List of 12
+  .. .. .. .. ..$ : num [1:38, 1:16] 0.377 0.361 0.333 0.272 0.236 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:38] "Adrm1" "Ap2m1" "Areg" "Atf3" ...
+  .. .. .. .. .. .. ..$ : chr [1:16] "I5d_3" "I5d_8" "I5d_39" "I5d_43" ...
+  .. .. .. .. ..$ : num [1:11, 1:40] 0.000233 0.174443 0.427421 0.169948 0.333055 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:11] "Adh1" "Lars2" "Nfkbia" "Nip7" ...
+  .. .. .. .. .. .. ..$ : chr [1:40] "I5d_4" "I5d_30" "I5d_33" "I5d_37" ...
+  .. .. .. .. ..$ : num [1:38, 1:64] 0.246 0.381 0.276 0.207 0.122 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:38] "Adh1" "Agr2" "Ahdc1" "Ascl2" ...
+  .. .. .. .. .. .. ..$ : chr [1:64] "I5d_6" "I5d_10" "I5d_12" "I5d_13" ...
+  .. .. .. .. ..$ : num [1:104, 1:36] 0.4319 0.2438 0.0873 0.2021 0.2149 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:104] "Ahdc1" "AI747448" "Aplp2" "Atf3" ...
+  .. .. .. .. .. .. ..$ : chr [1:36] "I5d_9" "I5d_11" "I5d_23" "I5d_25" ...
+  .. .. .. .. ..$ : num [1:15, 1:25] 0.103 0.421 0.349 0.462 0.496 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:15] "Fos" "H2-Aa" "H2-Ab1" "H2-DMa" ...
+  .. .. .. .. .. .. ..$ : chr [1:25] "I5d_14" "I5d_50" "III5d_11" "III5d_75" ...
+  .. .. .. .. ..$ : num [1:7, 1:15] 0.342 0.25 0.294 0.424 0.193 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:7] "Clca4" "Dmbt1" "Guca2a" "Hmgb2" ...
+  .. .. .. .. .. .. ..$ : chr [1:15] "I5d_17" "I5d_24" "I5d_53" "I5d_64" ...
+  .. .. .. .. ..$ : num 0
+  .. .. .. .. ..$ : num [1:13, 1:25] 0.449 0.34 0.408 0.475 0.031 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:13] "Ahdc1" "Atf3" "Chgb" "Defa17" ...
+  .. .. .. .. .. .. ..$ : chr [1:25] "I5d_36" "I5d_49" "II5d_23" "II5d_73" ...
+  .. .. .. .. ..$ : num [1:4, 1:11] 0.1518 0.1105 0.0575 0.4454 0.447 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:4] "Ptchd1" "Rapgef4" "Rorb" "Tmem38b"
+  .. .. .. .. .. .. ..$ : chr [1:11] "I5d_38" "I5d_54" "I5d_55" "I5d_79" ...
+  .. .. .. .. ..$ : num [1:3, 1:10] 0.184 0.159 0.4 0.169 0.159 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:3] "AY761184" "Chgb" "Pla2g2a"
+  .. .. .. .. .. .. ..$ : chr [1:10] "I5d_47" "I5d_90" "II5d_37" "II5d_46" ...
+  .. .. .. .. ..$ : num [1:11, 1:22] 0.05855 0.44849 0.00179 0.32356 0.24655 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:11] "Ceacam10" "Chgb" "Defa20" "Defa21" ...
+  .. .. .. .. .. .. ..$ : chr [1:22] "I5d_51" "II5d_2" "II5d_14" "II5d_28" ...
+  .. .. .. .. ..$ : num [1:16, 1:18] 0.000305 0.297697 0.000703 0.340798 0.037162 ...
+  .. .. .. .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. .. .. .. ..$ : chr [1:16] "Ang4" "Cd24a" "Ceacam10" "Chgb" ...
+  .. .. .. .. .. .. ..$ : chr [1:18] "I5d_60" "I5d_62" "I5d_70" "I5d_87" ...
+  .. .. ..@ cpart     : Named int [1:287] 1 2 3 1 4 3 4 3 3 5 ...
+  .. .. .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. ..@ medoids   : chr [1:14] "II5d_52" "II5d_61" "II5d_56" "I5d_52" ...
+  .. .. ..@ fcol      : chr [1:14] "#0024FFFF" "#00FF92FF" "#B600FFFF" "#00FF24FF" ...
+  .. .. ..@ filterpar :List of 7
+  .. .. .. ..$ mintotal : int 3000
+  .. .. .. ..$ minexpr  : int 5
+  .. .. .. ..$ minnumber: int 5
+  .. .. .. ..$ CGenes   : NULL
+  .. .. .. ..$ FGenes   : NULL
+  .. .. .. ..$ BGenes   : NULL
+  .. .. .. ..$ bmode    : chr "RaceID"
+  .. .. ..@ clusterpar:List of 9
+  .. .. .. ..$ clustnr   : num 30
+  .. .. .. ..$ bootnr    : num 50
+  .. .. .. ..$ samp      : NULL
+  .. .. .. ..$ metric    : chr "pearson"
+  .. .. .. ..$ sat       : logi TRUE
+  .. .. .. ..$ cln       : NULL
+  .. .. .. ..$ rseed     : num 17000
+  .. .. .. ..$ FSelect   : logi TRUE
+  .. .. .. ..$ FUNcluster: chr "kmedoids"
+  .. .. ..@ outlierpar:List of 4
+  .. .. .. ..$ outlg       : int 2
+  .. .. .. ..$ probthr     : num 0.001
+  .. .. .. ..$ thr         : num [1:40] 0.5 0.25 0.125 0.0625 0.0312 ...
+  .. .. .. ..$ outdistquant: num 0.95
+  ..@ ldata  :List of 7
+  .. ..$ lp  : Named int [1:278] 1 2 3 1 4 3 4 3 3 5 ...
+  .. .. ..- attr(*, "names")= chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. ..$ ld  : num [1:278, 1:278] 0 0.358 0.201 0.232 0.457 ...
+  .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. ..$ : chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. ..$ : chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. ..$ m   : int [1:11] 1 2 3 4 5 6 8 9 10 11 ...
+  .. ..$ pdi : num [1:278, 1:108] -0.231 -0.181 -0.212 -0.202 -0.119 ...
+  .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. ..$ : chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. .. ..$ : NULL
+  .. ..$ pdil:'data.frame':	278 obs. of  2 variables:
+  .. .. ..$ V1: num [1:278] 1.633 -0.147 0.259 1.538 2.956 ...
+  .. .. ..$ V2: num [1:278] 9.722 0.917 6.539 11.574 -1.691 ...
+  .. ..$ cn  :'data.frame':	11 obs. of  108 variables:
+  .. .. ..$ V1  : num [1:11] -0.21 -0.142 -0.175 -0.128 -0.202 ...
+  .. .. ..$ V2  : num [1:11] -0.0688 0.1266 -0.0287 0.125 -0.0892 ...
+  .. .. ..$ V3  : num [1:11] 0.1846 -0.16686 -0.02191 -0.02706 0.00761 ...
+  .. .. ..$ V4  : num [1:11] 0.0896 -0.0707 0.1626 -0.2123 0.2244 ...
+  .. .. ..$ V5  : num [1:11] 0.0355 0.0771 0.0386 0.0622 -0.0863 ...
+  .. .. ..$ V6  : num [1:11] -0.0495 0.0962 -0.0473 -0.173 0.0418 ...
+  .. .. ..$ V7  : num [1:11] 0.0142 0.031 0.0615 -0.0556 -0.0274 ...
+  .. .. ..$ V8  : num [1:11] -0.0794 0.0361 -0.0107 -0.0794 0.0277 ...
+  .. .. ..$ V9  : num [1:11] 0.09096 0.04261 -0.0126 -0.07568 0.00777 ...
+  .. .. ..$ V10 : num [1:11] 0.0703 0.0418 -0.0329 0.04 -0.0225 ...
+  .. .. ..$ V11 : num [1:11] 0.00305 0.01723 0.04593 0.02958 -0.01949 ...
+  .. .. ..$ V12 : num [1:11] 0.012209 -0.013318 -0.000702 0.086836 0.00677 ...
+  .. .. ..$ V13 : num [1:11] 0.05115 -0.02909 -0.01486 0.00539 -0.00845 ...
+  .. .. ..$ V14 : num [1:11] 0.000851 -0.017881 -0.01119 -0.01546 0.01306 ...
+  .. .. ..$ V15 : num [1:11] -0.01362 0.00688 -0.01548 -0.01088 -0.00999 ...
+  .. .. ..$ V16 : num [1:11] 0.03476 0.00426 0.00312 0.01996 0.00677 ...
+  .. .. ..$ V17 : num [1:11] -0.00831 -0.03181 0.000335 0.012551 0.003292 ...
+  .. .. ..$ V18 : num [1:11] 0.01421 -0.05371 0.00642 0.00928 -0.01266 ...
+  .. .. ..$ V19 : num [1:11] -0.00608 0.00653 -0.01766 0.00167 -0.00538 ...
+  .. .. ..$ V20 : num [1:11] -0.000326 0.004268 -0.00635 0.003193 -0.00883 ...
+  .. .. ..$ V21 : num [1:11] -0.01379 -0.03501 -0.02398 0.01406 0.00296 ...
+  .. .. ..$ V22 : num [1:11] 0.02337 -0.00215 -0.0073 -0.00893 0.00505 ...
+  .. .. ..$ V23 : num [1:11] 0.02278 -0.01209 -0.00213 0.00999 -0.00739 ...
+  .. .. ..$ V24 : num [1:11] -0.01788 0.01069 0.00934 -0.00753 0.012 ...
+  .. .. ..$ V25 : num [1:11] -0.000441 -0.004377 0.002733 0.024896 -0.005154 ...
+  .. .. ..$ V26 : num [1:11] 0.00681 0.02321 -0.01341 0.02783 0.0151 ...
+  .. .. ..$ V27 : num [1:11] 0.03912 0.01246 0.00637 -0.00767 -0.00226 ...
+  .. .. ..$ V28 : num [1:11] -0.01776 0.005 -0.01672 0.00345 -0.04536 ...
+  .. .. ..$ V29 : num [1:11] -0.0134 -0.00312 0.00752 -0.02439 0.01223 ...
+  .. .. ..$ V30 : num [1:11] -0.028781 0.002262 0.000972 -0.023205 -0.011164 ...
+  .. .. ..$ V31 : num [1:11] 0.00492 0.01089 0.00584 -0.01673 -0.0155 ...
+  .. .. ..$ V32 : num [1:11] 0.0094 0.027 -0.0199 -0.0092 -0.0037 ...
+  .. .. ..$ V33 : num [1:11] 1.32e-02 9.36e-05 4.14e-03 4.60e-03 1.08e-02 ...
+  .. .. ..$ V34 : num [1:11] 0.0105 -0.00682 0.00297 0.01438 -0.00716 ...
+  .. .. ..$ V35 : num [1:11] 0.00547 -0.018 -0.00703 -0.00602 0.00298 ...
+  .. .. ..$ V36 : num [1:11] 0.000401 -0.027679 -0.005411 0.020004 -0.02301 ...
+  .. .. ..$ V37 : num [1:11] -0.00896 -0.009695 0.000429 -0.009383 0.003242 ...
+  .. .. ..$ V38 : num [1:11] -0.00917 -0.02645 -0.00874 0.02057 0.00779 ...
+  .. .. ..$ V39 : num [1:11] -0.008777 -0.015131 -0.005637 0.000925 0.004372 ...
+  .. .. ..$ V40 : num [1:11] -0.00446 -0.01403 0.01705 0.00733 -0.01418 ...
+  .. .. ..$ V41 : num [1:11] 0.014452 -0.011496 -0.012947 0.007655 0.000406 ...
+  .. .. ..$ V42 : num [1:11] 0.02332 0.00766 0.01948 -0.00609 0.01014 ...
+  .. .. ..$ V43 : num [1:11] -0.01479 0.00441 0.00277 0.00006 -0.04215 ...
+  .. .. ..$ V44 : num [1:11] 0.0171 0.01666 -0.00253 -0.02128 -0.00446 ...
+  .. .. ..$ V45 : num [1:11] 0.01894 -0.00699 0.00659 0.0122 -0.00882 ...
+  .. .. ..$ V46 : num [1:11] -0.01031 -0.01345 -0.01387 0.00681 -0.00442 ...
+  .. .. ..$ V47 : num [1:11] 0.00378 0.00768 -0.00395 0.00964 -0.02624 ...
+  .. .. ..$ V48 : num [1:11] 0.007746 0.002372 -0.000891 0.008718 -0.014987 ...
+  .. .. ..$ V49 : num [1:11] -0.0241 -0.00145 0.01808 0.01495 -0.00789 ...
+  .. .. ..$ V50 : num [1:11] -0.000476 -0.01487 -0.008396 -0.011247 -0.027185 ...
+  .. .. ..$ V51 : num [1:11] 0.00503 0.02038 0.00855 -0.03816 -0.02445 ...
+  .. .. ..$ V52 : num [1:11] 0.02426 0.02533 0.00416 0.00618 0.015 ...
+  .. .. ..$ V53 : num [1:11] 0.01502 -0.00544 -0.0036 -0.01042 -0.0026 ...
+  .. .. ..$ V54 : num [1:11] 0.00522 -0.01458 0.0083 0.02064 -0.00484 ...
+  .. .. ..$ V55 : num [1:11] -0.01107 -0.02129 0.00053 -0.00353 -0.0157 ...
+  .. .. ..$ V56 : num [1:11] -0.01012 -0.00711 0.01264 -0.00948 -0.01433 ...
+  .. .. ..$ V57 : num [1:11] 0.00416 -0.00716 -0.00396 0.00633 -0.01141 ...
+  .. .. ..$ V58 : num [1:11] 0.0035 0.00651 -0.01486 0.0085 -0.02186 ...
+  .. .. ..$ V59 : num [1:11] -0.000025 0.01121 0.008682 0.005965 -0.008536 ...
+  .. .. ..$ V60 : num [1:11] 0.012156 0.000536 -0.016121 -0.007528 -0.016342 ...
+  .. .. ..$ V61 : num [1:11] -0.00855 -0.02104 -0.01223 -0.00841 0.00672 ...
+  .. .. ..$ V62 : num [1:11] -0.00546 -0.02531 -0.03168 0.00577 0.01157 ...
+  .. .. ..$ V63 : num [1:11] -0.0191 -0.0281 -0.0133 -0.0149 -0.0144 ...
+  .. .. ..$ V64 : num [1:11] -0.00367 -0.01584 -0.00551 0.01038 -0.00724 ...
+  .. .. ..$ V65 : num [1:11] -0.00233 0.00896 -0.01686 -0.02021 -0.00974 ...
+  .. .. ..$ V66 : num [1:11] -0.00525 0.00159 0.00378 0.00259 0.00731 ...
+  .. .. ..$ V67 : num [1:11] -0.01073 0.01686 0.02727 -0.01409 -0.00503 ...
+  .. .. ..$ V68 : num [1:11] -0.000456 0.001636 0.00242 0.004188 -0.016807 ...
+  .. .. ..$ V69 : num [1:11] -0.001525 0.003679 -0.000393 -0.002364 0.002244 ...
+  .. .. ..$ V70 : num [1:11] -0.01009 0.01274 0.01955 0.01341 0.00343 ...
+  .. .. ..$ V71 : num [1:11] 0.00547 0.02644 0.0031 0.00272 0.02675 ...
+  .. .. ..$ V72 : num [1:11] 0.00144 -0.00425 -0.00138 0.00595 0.00193 ...
+  .. .. ..$ V73 : num [1:11] 0.00389 -0.00828 -0.00469 -0.00632 0.00846 ...
+  .. .. ..$ V74 : num [1:11] -0.01141 0.00444 0.00817 0.01463 -0.0034 ...
+  .. .. ..$ V75 : num [1:11] -0.01227 -0.01089 -0.00345 -0.02274 -0.00375 ...
+  .. .. ..$ V76 : num [1:11] 0.004631 -0.000368 0.003108 0.013551 -0.011997 ...
+  .. .. ..$ V77 : num [1:11] -0.00651 -0.01665 -0.00801 -0.00625 -0.00683 ...
+  .. .. ..$ V78 : num [1:11] 0.00283 0.00435 -0.00111 0.02024 0.00613 ...
+  .. .. ..$ V79 : num [1:11] 0.002513 0.011839 0.009917 0.008041 -0.000337 ...
+  .. .. ..$ V80 : num [1:11] -5.62e-03 -8.54e-03 -4.38e-03 6.09e-03 4.46e-06 ...
+  .. .. ..$ V81 : num [1:11] -4.28e-05 5.05e-03 -5.49e-03 2.99e-04 6.79e-03 ...
+  .. .. ..$ V82 : num [1:11] 0.00545 -0.00351 -0.00122 -0.01324 0.00111 ...
+  .. .. ..$ V83 : num [1:11] 0.0161 -0.0129 -0.0159 -0.0217 -0.0209 ...
+  .. .. ..$ V84 : num [1:11] -0.00197 0.00846 0.01585 -0.00647 0.00421 ...
+  .. .. ..$ V85 : num [1:11] 0.008276 -0.000932 -0.010438 0.001787 -0.007416 ...
+  .. .. ..$ V86 : num [1:11] -0.00809 0.00436 0.00605 -0.00172 0.0055 ...
+  .. .. ..$ V87 : num [1:11] -0.00181 -0.01198 -0.00181 0.00743 0.00417 ...
+  .. .. ..$ V88 : num [1:11] 0.002435 0.000644 0.002968 0.008076 0.019435 ...
+  .. .. ..$ V89 : num [1:11] -0.01133 -0.00644 -0.01211 0.0062 -0.00402 ...
+  .. .. ..$ V90 : num [1:11] -0.00209 -0.00147 -0.00468 -0.00719 -0.00877 ...
+  .. .. ..$ V91 : num [1:11] -0.000592 -0.014395 -0.007306 0.002176 0.016773 ...
+  .. .. ..$ V92 : num [1:11] -0.00927 -0.00429 0.00914 0.00687 0.00974 ...
+  .. .. ..$ V93 : num [1:11] 0.00196 -0.01118 -0.00246 0.00957 -0.00633 ...
+  .. .. ..$ V94 : num [1:11] -0.00297 0.00141 -0.0111 -0.00301 0.005 ...
+  .. .. ..$ V95 : num [1:11] -0.00303 0.01921 -0.0146 -0.00698 -0.00731 ...
+  .. .. ..$ V96 : num [1:11] 0.00184 -0.00918 -0.00684 -0.00536 -0.00241 ...
+  .. .. ..$ V97 : num [1:11] -0.00621 -0.00757 0.00498 -0.00838 0.00859 ...
+  .. .. ..$ V98 : num [1:11] -0.00255 -0.00757 0.00859 -0.00198 0.0128 ...
+  .. .. ..$ V99 : num [1:11] 0.00107 0.00494 -0.00908 -0.00182 0.00433 ...
+  .. .. .. [list output truncated]
+  .. ..$ cnl :'data.frame':	11 obs. of  2 variables:
+  .. .. ..$ V1: num [1:11] 1.92 -2.17 1.27 2 -0.84 ...
+  .. .. ..$ V2: num [1:11] 10.1 -1.18 5.78 -2.7 6.84 ...
+  ..@ entropy: Named num [1:287] 0.721 0.745 0.746 0.713 0.685 ...
+  .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  ..@ trproj :List of 3
+  .. ..$ res:'data.frame':	278 obs. of  3 variables:
+  .. .. ..$ o: int [1:278] 1 2 3 1 4 3 4 3 3 5 ...
+  .. .. ..$ l: num [1:278] 3 3 5 6 3 1 2 5 5 3 ...
+  .. .. ..$ h: num [1:278] 0.352 0.445 0.513 0.575 0.265 ...
+  .. ..$ rma:'data.frame':	278 obs. of  11 variables:
+  .. .. ..$ X1 : num [1:278] NA 0.417 0.189 NA 0.338 ...
+  .. .. ..$ X2 : num [1:278] 0.0184 NA 0.2104 -0.1375 0.1015 ...
+  .. .. ..$ X3 : num [1:278] 0.352 0.445 NA -0.109 0.265 ...
+  .. .. ..$ X4 : num [1:278] 0.0304 0.4035 0.1318 0.0615 NA ...
+  .. .. ..$ X5 : num [1:278] 0.46266 0.54261 0.51256 -0.00158 0.2742 ...
+  .. .. ..$ X6 : num [1:278] 0.0184 0.2764 0.1619 0.5747 0.3162 ...
+  .. .. ..$ X8 : num [1:278] -0.0469 0.3898 0.1195 -0.1246 0.1944 ...
+  .. .. ..$ X9 : num [1:278] 0.08207 0.01157 0.00509 -0.15726 0.11963 ...
+  .. .. ..$ X10: num [1:278] 0.1579 0.2216 0.0819 0.0795 0.213 ...
+  .. .. ..$ X11: num [1:278] -0.0143 0.0754 -0.0922 0.0196 0.1136 ...
+  .. .. ..$ X12: num [1:278] 0.2608 0.3593 0.2216 0.0334 0.3357 ...
+  .. ..$ d  :List of 2
+  .. .. ..$ v   :'data.frame':	3058 obs. of  108 variables:
+  .. .. .. ..$ V1  : num [1:3058] 0 0.06745 0.03466 0.08132 0.00764 ...
+  .. .. .. ..$ V2  : num [1:3058] 0 0.1954 0.0402 0.1939 -0.0204 ...
+  .. .. .. ..$ V3  : num [1:3058] 0 -0.351 -0.207 -0.212 -0.177 ...
+  .. .. .. ..$ V4  : num [1:3058] 0 -0.16 0.073 -0.302 0.135 ...
+  .. .. .. ..$ V5  : num [1:3058] 0 0.04157 0.00308 0.02675 -0.12178 ...
+  .. .. .. ..$ V6  : num [1:3058] 0 0.14571 0.00217 -0.12349 0.09128 ...
+  .. .. .. ..$ V7  : num [1:3058] 0 0.0168 0.0473 -0.0698 -0.0416 ...
+  .. .. .. ..$ V8  : num [1:3058] 0.00 1.15e-01 6.86e-02 -8.64e-06 1.07e-01 ...
+  .. .. .. ..$ V9  : num [1:3058] 0 -0.0484 -0.1036 -0.1666 -0.0832 ...
+  .. .. .. ..$ V10 : num [1:3058] 0 -0.0286 -0.1033 -0.0304 -0.0929 ...
+  .. .. .. ..$ V11 : num [1:3058] 0 0.0142 0.0429 0.0265 -0.0225 ...
+  .. .. .. ..$ V12 : num [1:3058] 0 -0.02553 -0.01291 0.07463 -0.00544 ...
+  .. .. .. ..$ V13 : num [1:3058] 0 -0.0802 -0.066 -0.0458 -0.0596 ...
+  .. .. .. ..$ V14 : num [1:3058] 0 -0.0187 -0.012 -0.0163 0.0122 ...
+  .. .. .. ..$ V15 : num [1:3058] 0 0.0205 -0.00187 0.00274 0.00363 ...
+  .. .. .. ..$ V16 : num [1:3058] 0 -0.0305 -0.0316 -0.0148 -0.028 ...
+  .. .. .. ..$ V17 : num [1:3058] 0 -0.0235 0.00865 0.02086 0.0116 ...
+  .. .. .. ..$ V18 : num [1:3058] 0 -0.06792 -0.00779 -0.00493 -0.02687 ...
+  .. .. .. ..$ V19 : num [1:3058] 0 0.012607 -0.011578 0.007749 0.000696 ...
+  .. .. .. ..$ V20 : num [1:3058] 0 0.00459 -0.00602 0.00352 -0.0085 ...
+  .. .. .. ..$ V21 : num [1:3058] 0 -0.0212 -0.0102 0.0279 0.0167 ...
+  .. .. .. ..$ V22 : num [1:3058] 0 -0.0255 -0.0307 -0.0323 -0.0183 ...
+  .. .. .. ..$ V23 : num [1:3058] 0 -0.0349 -0.0249 -0.0128 -0.0302 ...
+  .. .. .. ..$ V24 : num [1:3058] 0 0.0286 0.0272 0.0103 0.0299 ...
+  .. .. .. ..$ V25 : num [1:3058] 0 -0.00394 0.00317 0.02534 -0.00471 ...
+  .. .. .. ..$ V26 : num [1:3058] 0 0.0164 -0.02022 0.02101 0.00829 ...
+  .. .. .. ..$ V27 : num [1:3058] 0 -0.0267 -0.0328 -0.0468 -0.0414 ...
+  .. .. .. ..$ V28 : num [1:3058] 0 0.02275 0.00104 0.02121 -0.02761 ...
+  .. .. .. ..$ V29 : num [1:3058] 0 0.0103 0.0209 -0.011 0.0256 ...
+  .. .. .. ..$ V30 : num [1:3058] 0 0.03104 0.02975 0.00558 0.01762 ...
+  .. .. .. ..$ V31 : num [1:3058] 0 0.005969 0.000924 -0.021647 -0.020421 ...
+  .. .. .. ..$ V32 : num [1:3058] 0 0.0176 -0.0293 -0.0186 -0.0131 ...
+  .. .. .. ..$ V33 : num [1:3058] 0 -0.01314 -0.00909 -0.00863 -0.00247 ...
+  .. .. .. ..$ V34 : num [1:3058] 0 -0.01731 -0.00753 0.00388 -0.01766 ...
+  .. .. .. ..$ V35 : num [1:3058] 0 -0.0235 -0.0125 -0.0115 -0.0025 ...
+  .. .. .. ..$ V36 : num [1:3058] 0 -0.02808 -0.00581 0.0196 -0.02341 ...
+  .. .. .. ..$ V37 : num [1:3058] 0 -0.000735 0.009389 -0.000422 0.012202 ...
+  .. .. .. ..$ V38 : num [1:3058] 0 -0.017278 0.000435 0.029739 0.016961 ...
+  .. .. .. ..$ V39 : num [1:3058] 0 -0.00635 0.00314 0.0097 0.01315 ...
+  .. .. .. ..$ V40 : num [1:3058] 0 -0.00957 0.02151 0.01179 -0.00972 ...
+  .. .. .. ..$ V41 : num [1:3058] 0 -0.0259 -0.0274 -0.0068 -0.014 ...
+  .. .. .. ..$ V42 : num [1:3058] 0 -0.01566 -0.00384 -0.02941 -0.01318 ...
+  .. .. .. ..$ V43 : num [1:3058] 0 0.0192 0.0176 0.0149 -0.0274 ...
+  .. .. .. ..$ V44 : num [1:3058] 0 -0.000433 -0.019627 -0.038379 -0.021553 ...
+  .. .. .. ..$ V45 : num [1:3058] 0 -0.02593 -0.01236 -0.00674 -0.02776 ...
+  .. .. .. ..$ V46 : num [1:3058] 0 -0.00314 -0.00355 0.01712 0.00589 ...
+  .. .. .. ..$ V47 : num [1:3058] 0 0.0039 -0.00773 0.00586 -0.03002 ...
+  .. .. .. ..$ V48 : num [1:3058] 0 -0.005375 -0.008637 0.000972 -0.022734 ...
+  .. .. .. ..$ V49 : num [1:3058] 0 0.0226 0.0422 0.0391 0.0162 ...
+  .. .. .. ..$ V50 : num [1:3058] 0 -0.01439 -0.00792 -0.01077 -0.02671 ...
+  .. .. .. ..$ V51 : num [1:3058] 0 0.01535 0.00352 -0.04319 -0.02948 ...
+  .. .. .. ..$ V52 : num [1:3058] 0 0.00108 -0.0201 -0.01807 -0.00925 ...
+  .. .. .. ..$ V53 : num [1:3058] 0 -0.0205 -0.0186 -0.0254 -0.0176 ...
+  .. .. .. ..$ V54 : num [1:3058] 0 -0.0198 0.00307 0.01542 -0.01006 ...
+  .. .. .. ..$ V55 : num [1:3058] 0 -0.01023 0.0116 0.00754 -0.00464 ...
+  .. .. .. ..$ V56 : num [1:3058] 0 0.003006 0.022755 0.000632 -0.004214 ...
+  .. .. .. ..$ V57 : num [1:3058] 0 -0.01132 -0.00812 0.00217 -0.01557 ...
+  .. .. .. ..$ V58 : num [1:3058] 0 0.00301 -0.01836 0.005 -0.02536 ...
+  .. .. .. ..$ V59 : num [1:3058] 0 0.01123 0.00871 0.00599 -0.00851 ...
+  .. .. .. ..$ V60 : num [1:3058] 0 -0.0116 -0.0283 -0.0197 -0.0285 ...
+  .. .. .. ..$ V61 : num [1:3058] 0 -0.012491 -0.003681 0.000143 0.015277 ...
+  .. .. .. ..$ V62 : num [1:3058] 0 -0.0199 -0.0262 0.0112 0.017 ...
+  .. .. .. ..$ V63 : num [1:3058] 0 -0.00908 0.00572 0.00417 0.00462 ...
+  .. .. .. ..$ V64 : num [1:3058] 0 -0.01217 -0.00184 0.01406 -0.00357 ...
+  .. .. .. ..$ V65 : num [1:3058] 0 0.01129 -0.01452 -0.01788 -0.00741 ...
+  .. .. .. ..$ V66 : num [1:3058] 0 0.00684 0.00903 0.00784 0.01256 ...
+  .. .. .. ..$ V67 : num [1:3058] 0 0.02759 0.038 -0.00336 0.0057 ...
+  .. .. .. ..$ V68 : num [1:3058] 0 0.00209 0.00288 0.00464 -0.01635 ...
+  .. .. .. ..$ V69 : num [1:3058] 0 0.005205 0.001133 -0.000839 0.003769 ...
+  .. .. .. ..$ V70 : num [1:3058] 0 0.0228 0.0296 0.0235 0.0135 ...
+  .. .. .. ..$ V71 : num [1:3058] 0 0.02097 -0.00237 -0.00275 0.02128 ...
+  .. .. .. ..$ V72 : num [1:3058] 0 -0.005684 -0.002812 0.004514 0.000491 ...
+  .. .. .. ..$ V73 : num [1:3058] 0 -0.01216 -0.00858 -0.0102 0.00458 ...
+  .. .. .. ..$ V74 : num [1:3058] 0 0.01585 0.01958 0.02604 0.00801 ...
+  .. .. .. ..$ V75 : num [1:3058] 0 0.00138 0.00882 -0.01046 0.00852 ...
+  .. .. .. ..$ V76 : num [1:3058] 0 -0.005 -0.00152 0.00892 -0.01663 ...
+  .. .. .. ..$ V77 : num [1:3058] 0 -0.010145 -0.001496 0.000265 -0.000319 ...
+  .. .. .. ..$ V78 : num [1:3058] 0 0.00152 -0.00394 0.01741 0.0033 ...
+  .. .. .. ..$ V79 : num [1:3058] 0 0.00933 0.0074 0.00553 -0.00285 ...
+  .. .. .. ..$ V80 : num [1:3058] 0 -0.00292 0.00124 0.01171 0.00562 ...
+  .. .. .. ..$ V81 : num [1:3058] 0 0.005094 -0.005452 0.000342 0.006831 ...
+  .. .. .. ..$ V82 : num [1:3058] 0 -0.00896 -0.00667 -0.0187 -0.00434 ...
+  .. .. .. ..$ V83 : num [1:3058] 0 -0.029 -0.032 -0.0378 -0.037 ...
+  .. .. .. ..$ V84 : num [1:3058] 0 0.01043 0.01781 -0.0045 0.00618 ...
+  .. .. .. ..$ V85 : num [1:3058] 0 -0.00921 -0.01871 -0.00649 -0.01569 ...
+  .. .. .. ..$ V86 : num [1:3058] 0 0.01245 0.01414 0.00636 0.01358 ...
+  .. .. .. ..$ V87 : num [1:3058] 0.00 -1.02e-02 6.92e-06 9.24e-03 5.98e-03 ...
+  .. .. .. ..$ V88 : num [1:3058] 0 -0.00179 0.000533 0.005642 0.017001 ...
+  .. .. .. ..$ V89 : num [1:3058] 0 0.004892 -0.000771 0.017539 0.007315 ...
+  .. .. .. ..$ V90 : num [1:3058] 0 0.000621 -0.002584 -0.005096 -0.006679 ...
+  .. .. .. ..$ V91 : num [1:3058] 0 -0.0138 -0.00671 0.00277 0.01736 ...
+  .. .. .. ..$ V92 : num [1:3058] 0 0.00498 0.01841 0.01614 0.01901 ...
+  .. .. .. ..$ V93 : num [1:3058] 0 -0.01314 -0.00442 0.00761 -0.00829 ...
+  .. .. .. ..$ V94 : num [1:3058] 0.00 4.37e-03 -8.13e-03 -4.06e-05 7.97e-03 ...
+  .. .. .. ..$ V95 : num [1:3058] 0 0.02224 -0.01157 -0.00395 -0.00428 ...
+  .. .. .. ..$ V96 : num [1:3058] 0 -0.01102 -0.00868 -0.0072 -0.00425 ...
+  .. .. .. ..$ V97 : num [1:3058] 0 -0.00136 0.01119 -0.00217 0.01479 ...
+  .. .. .. ..$ V98 : num [1:3058] 0 -0.005018 0.011138 0.000566 0.015351 ...
+  .. .. .. ..$ V99 : num [1:3058] 0 0.00387 -0.01016 -0.00289 0.00325 ...
+  .. .. .. .. [list output truncated]
+  .. .. ..$ pdcn:'data.frame':	3058 obs. of  108 variables:
+  .. .. .. ..$ V1  : num [1:3058] -0.21 -0.21 -0.21 -0.21 -0.21 ...
+  .. .. .. ..$ V2  : num [1:3058] -0.0688 -0.0688 -0.0688 -0.0688 -0.0688 ...
+  .. .. .. ..$ V3  : num [1:3058] 0.185 0.185 0.185 0.185 0.185 ...
+  .. .. .. ..$ V4  : num [1:3058] 0.0896 0.0896 0.0896 0.0896 0.0896 ...
+  .. .. .. ..$ V5  : num [1:3058] 0.0355 0.0355 0.0355 0.0355 0.0355 ...
+  .. .. .. ..$ V6  : num [1:3058] -0.0495 -0.0495 -0.0495 -0.0495 -0.0495 ...
+  .. .. .. ..$ V7  : num [1:3058] 0.0142 0.0142 0.0142 0.0142 0.0142 ...
+  .. .. .. ..$ V8  : num [1:3058] -0.0794 -0.0794 -0.0794 -0.0794 -0.0794 ...
+  .. .. .. ..$ V9  : num [1:3058] 0.091 0.091 0.091 0.091 0.091 ...
+  .. .. .. ..$ V10 : num [1:3058] 0.0703 0.0703 0.0703 0.0703 0.0703 ...
+  .. .. .. ..$ V11 : num [1:3058] 0.00305 0.00305 0.00305 0.00305 0.00305 ...
+  .. .. .. ..$ V12 : num [1:3058] 0.0122 0.0122 0.0122 0.0122 0.0122 ...
+  .. .. .. ..$ V13 : num [1:3058] 0.0512 0.0512 0.0512 0.0512 0.0512 ...
+  .. .. .. ..$ V14 : num [1:3058] 0.000851 0.000851 0.000851 0.000851 0.000851 ...
+  .. .. .. ..$ V15 : num [1:3058] -0.0136 -0.0136 -0.0136 -0.0136 -0.0136 ...
+  .. .. .. ..$ V16 : num [1:3058] 0.0348 0.0348 0.0348 0.0348 0.0348 ...
+  .. .. .. ..$ V17 : num [1:3058] -0.00831 -0.00831 -0.00831 -0.00831 -0.00831 ...
+  .. .. .. ..$ V18 : num [1:3058] 0.0142 0.0142 0.0142 0.0142 0.0142 ...
+  .. .. .. ..$ V19 : num [1:3058] -0.00608 -0.00608 -0.00608 -0.00608 -0.00608 ...
+  .. .. .. ..$ V20 : num [1:3058] -0.000326 -0.000326 -0.000326 -0.000326 -0.000326 ...
+  .. .. .. ..$ V21 : num [1:3058] -0.0138 -0.0138 -0.0138 -0.0138 -0.0138 ...
+  .. .. .. ..$ V22 : num [1:3058] 0.0234 0.0234 0.0234 0.0234 0.0234 ...
+  .. .. .. ..$ V23 : num [1:3058] 0.0228 0.0228 0.0228 0.0228 0.0228 ...
+  .. .. .. ..$ V24 : num [1:3058] -0.0179 -0.0179 -0.0179 -0.0179 -0.0179 ...
+  .. .. .. ..$ V25 : num [1:3058] -0.000441 -0.000441 -0.000441 -0.000441 -0.000441 ...
+  .. .. .. ..$ V26 : num [1:3058] 0.00681 0.00681 0.00681 0.00681 0.00681 ...
+  .. .. .. ..$ V27 : num [1:3058] 0.0391 0.0391 0.0391 0.0391 0.0391 ...
+  .. .. .. ..$ V28 : num [1:3058] -0.0178 -0.0178 -0.0178 -0.0178 -0.0178 ...
+  .. .. .. ..$ V29 : num [1:3058] -0.0134 -0.0134 -0.0134 -0.0134 -0.0134 ...
+  .. .. .. ..$ V30 : num [1:3058] -0.0288 -0.0288 -0.0288 -0.0288 -0.0288 ...
+  .. .. .. ..$ V31 : num [1:3058] 0.00492 0.00492 0.00492 0.00492 0.00492 ...
+  .. .. .. ..$ V32 : num [1:3058] 0.0094 0.0094 0.0094 0.0094 0.0094 ...
+  .. .. .. ..$ V33 : num [1:3058] 0.0132 0.0132 0.0132 0.0132 0.0132 ...
+  .. .. .. ..$ V34 : num [1:3058] 0.0105 0.0105 0.0105 0.0105 0.0105 ...
+  .. .. .. ..$ V35 : num [1:3058] 0.00547 0.00547 0.00547 0.00547 0.00547 ...
+  .. .. .. ..$ V36 : num [1:3058] 0.000401 0.000401 0.000401 0.000401 0.000401 ...
+  .. .. .. ..$ V37 : num [1:3058] -0.00896 -0.00896 -0.00896 -0.00896 -0.00896 ...
+  .. .. .. ..$ V38 : num [1:3058] -0.00917 -0.00917 -0.00917 -0.00917 -0.00917 ...
+  .. .. .. ..$ V39 : num [1:3058] -0.00878 -0.00878 -0.00878 -0.00878 -0.00878 ...
+  .. .. .. ..$ V40 : num [1:3058] -0.00446 -0.00446 -0.00446 -0.00446 -0.00446 ...
+  .. .. .. ..$ V41 : num [1:3058] 0.0145 0.0145 0.0145 0.0145 0.0145 ...
+  .. .. .. ..$ V42 : num [1:3058] 0.0233 0.0233 0.0233 0.0233 0.0233 ...
+  .. .. .. ..$ V43 : num [1:3058] -0.0148 -0.0148 -0.0148 -0.0148 -0.0148 ...
+  .. .. .. ..$ V44 : num [1:3058] 0.0171 0.0171 0.0171 0.0171 0.0171 ...
+  .. .. .. ..$ V45 : num [1:3058] 0.0189 0.0189 0.0189 0.0189 0.0189 ...
+  .. .. .. ..$ V46 : num [1:3058] -0.0103 -0.0103 -0.0103 -0.0103 -0.0103 ...
+  .. .. .. ..$ V47 : num [1:3058] 0.00378 0.00378 0.00378 0.00378 0.00378 ...
+  .. .. .. ..$ V48 : num [1:3058] 0.00775 0.00775 0.00775 0.00775 0.00775 ...
+  .. .. .. ..$ V49 : num [1:3058] -0.0241 -0.0241 -0.0241 -0.0241 -0.0241 ...
+  .. .. .. ..$ V50 : num [1:3058] -0.000476 -0.000476 -0.000476 -0.000476 -0.000476 ...
+  .. .. .. ..$ V51 : num [1:3058] 0.00503 0.00503 0.00503 0.00503 0.00503 ...
+  .. .. .. ..$ V52 : num [1:3058] 0.0243 0.0243 0.0243 0.0243 0.0243 ...
+  .. .. .. ..$ V53 : num [1:3058] 0.015 0.015 0.015 0.015 0.015 ...
+  .. .. .. ..$ V54 : num [1:3058] 0.00522 0.00522 0.00522 0.00522 0.00522 ...
+  .. .. .. ..$ V55 : num [1:3058] -0.0111 -0.0111 -0.0111 -0.0111 -0.0111 ...
+  .. .. .. ..$ V56 : num [1:3058] -0.0101 -0.0101 -0.0101 -0.0101 -0.0101 ...
+  .. .. .. ..$ V57 : num [1:3058] 0.00416 0.00416 0.00416 0.00416 0.00416 ...
+  .. .. .. ..$ V58 : num [1:3058] 0.0035 0.0035 0.0035 0.0035 0.0035 ...
+  .. .. .. ..$ V59 : num [1:3058] -2.5e-05 -2.5e-05 -2.5e-05 -2.5e-05 -2.5e-05 ...
+  .. .. .. ..$ V60 : num [1:3058] 0.0122 0.0122 0.0122 0.0122 0.0122 ...
+  .. .. .. ..$ V61 : num [1:3058] -0.00855 -0.00855 -0.00855 -0.00855 -0.00855 ...
+  .. .. .. ..$ V62 : num [1:3058] -0.00546 -0.00546 -0.00546 -0.00546 -0.00546 ...
+  .. .. .. ..$ V63 : num [1:3058] -0.0191 -0.0191 -0.0191 -0.0191 -0.0191 ...
+  .. .. .. ..$ V64 : num [1:3058] -0.00367 -0.00367 -0.00367 -0.00367 -0.00367 ...
+  .. .. .. ..$ V65 : num [1:3058] -0.00233 -0.00233 -0.00233 -0.00233 -0.00233 ...
+  .. .. .. ..$ V66 : num [1:3058] -0.00525 -0.00525 -0.00525 -0.00525 -0.00525 ...
+  .. .. .. ..$ V67 : num [1:3058] -0.0107 -0.0107 -0.0107 -0.0107 -0.0107 ...
+  .. .. .. ..$ V68 : num [1:3058] -0.000456 -0.000456 -0.000456 -0.000456 -0.000456 ...
+  .. .. .. ..$ V69 : num [1:3058] -0.00153 -0.00153 -0.00153 -0.00153 -0.00153 ...
+  .. .. .. ..$ V70 : num [1:3058] -0.0101 -0.0101 -0.0101 -0.0101 -0.0101 ...
+  .. .. .. ..$ V71 : num [1:3058] 0.00547 0.00547 0.00547 0.00547 0.00547 ...
+  .. .. .. ..$ V72 : num [1:3058] 0.00144 0.00144 0.00144 0.00144 0.00144 ...
+  .. .. .. ..$ V73 : num [1:3058] 0.00389 0.00389 0.00389 0.00389 0.00389 ...
+  .. .. .. ..$ V74 : num [1:3058] -0.0114 -0.0114 -0.0114 -0.0114 -0.0114 ...
+  .. .. .. ..$ V75 : num [1:3058] -0.0123 -0.0123 -0.0123 -0.0123 -0.0123 ...
+  .. .. .. ..$ V76 : num [1:3058] 0.00463 0.00463 0.00463 0.00463 0.00463 ...
+  .. .. .. ..$ V77 : num [1:3058] -0.00651 -0.00651 -0.00651 -0.00651 -0.00651 ...
+  .. .. .. ..$ V78 : num [1:3058] 0.00283 0.00283 0.00283 0.00283 0.00283 ...
+  .. .. .. ..$ V79 : num [1:3058] 0.00251 0.00251 0.00251 0.00251 0.00251 ...
+  .. .. .. ..$ V80 : num [1:3058] -0.00562 -0.00562 -0.00562 -0.00562 -0.00562 ...
+  .. .. .. ..$ V81 : num [1:3058] -4.28e-05 -4.28e-05 -4.28e-05 -4.28e-05 -4.28e-05 ...
+  .. .. .. ..$ V82 : num [1:3058] 0.00545 0.00545 0.00545 0.00545 0.00545 ...
+  .. .. .. ..$ V83 : num [1:3058] 0.0161 0.0161 0.0161 0.0161 0.0161 ...
+  .. .. .. ..$ V84 : num [1:3058] -0.00197 -0.00197 -0.00197 -0.00197 -0.00197 ...
+  .. .. .. ..$ V85 : num [1:3058] 0.00828 0.00828 0.00828 0.00828 0.00828 ...
+  .. .. .. ..$ V86 : num [1:3058] -0.00809 -0.00809 -0.00809 -0.00809 -0.00809 ...
+  .. .. .. ..$ V87 : num [1:3058] -0.00181 -0.00181 -0.00181 -0.00181 -0.00181 ...
+  .. .. .. ..$ V88 : num [1:3058] 0.00243 0.00243 0.00243 0.00243 0.00243 ...
+  .. .. .. ..$ V89 : num [1:3058] -0.0113 -0.0113 -0.0113 -0.0113 -0.0113 ...
+  .. .. .. ..$ V90 : num [1:3058] -0.00209 -0.00209 -0.00209 -0.00209 -0.00209 ...
+  .. .. .. ..$ V91 : num [1:3058] -0.000592 -0.000592 -0.000592 -0.000592 -0.000592 ...
+  .. .. .. ..$ V92 : num [1:3058] -0.00927 -0.00927 -0.00927 -0.00927 -0.00927 ...
+  .. .. .. ..$ V93 : num [1:3058] 0.00196 0.00196 0.00196 0.00196 0.00196 ...
+  .. .. .. ..$ V94 : num [1:3058] -0.00297 -0.00297 -0.00297 -0.00297 -0.00297 ...
+  .. .. .. ..$ V95 : num [1:3058] -0.00303 -0.00303 -0.00303 -0.00303 -0.00303 ...
+  .. .. .. ..$ V96 : num [1:3058] 0.00184 0.00184 0.00184 0.00184 0.00184 ...
+  .. .. .. ..$ V97 : num [1:3058] -0.00621 -0.00621 -0.00621 -0.00621 -0.00621 ...
+  .. .. .. ..$ V98 : num [1:3058] -0.00255 -0.00255 -0.00255 -0.00255 -0.00255 ...
+  .. .. .. ..$ V99 : num [1:3058] 0.00107 0.00107 0.00107 0.00107 0.00107 ...
+  .. .. .. .. [list output truncated]
+  ..@ par    :List of 8
+  .. ..$ cthr   : int 5
+  .. ..$ knn    : num 3
+  .. ..$ nmode  : logi TRUE
+  .. ..$ fast   : logi FALSE
+  .. ..$ fr     : logi FALSE
+  .. ..$ pdishuf: int 2000
+  .. ..$ rseed  : num 17000
+  .. ..$ pthr   : num 0.01
+  ..@ prback :'data.frame':	0 obs. of  0 variables
+Formal class 'data.frame' [package "methods"] with 4 slots
+  .. .. ..@ .Data    : list()
+  .. .. ..@ names    : chr(0) 
+  .. .. ..@ row.names: int(0) 
+  .. .. ..@ .S3Class : chr "data.frame"
+  ..@ prbacka:'data.frame':	0 obs. of  0 variables
+Formal class 'data.frame' [package "methods"] with 4 slots
+  .. .. ..@ .Data    : list()
+  .. .. ..@ names    : chr(0) 
+  .. .. ..@ row.names: int(0) 
+  .. .. ..@ .S3Class : chr "data.frame"
+  ..@ ltcoord: num [1:278, 1:2] 1.744 -0.897 0.407 1.924 1.831 ...
+  .. ..- attr(*, "dimnames")=List of 2
+  .. .. ..$ : chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
+  .. .. ..$ : chr [1:2] "V1" "V2"
+  ..@ prtree :List of 2
+  .. ..$ n:List of 55
+  .. .. ..$ 1.3  : chr [1:31] "I5d_3" "I5d_10" "I5d_39" "I5d_41" ...
+  .. .. ..$ 2.3  : chr [1:26] "I5d_4" "I5d_30" "I5d_33" "I5d_34" ...
+  .. .. ..$ 3.5  : chr [1:57] "I5d_6" "I5d_12" "I5d_13" "I5d_14" ...
+  .. .. ..$ 1.6  : chr [1:17] "I5d_8" "I5d_17" "I5d_24" "I5d_53" ...
+  .. .. ..$ 3.4  : chr [1:11] "I5d_9" "I5d_23" "I5d_52" "I5d_71" ...
+  .. .. ..$ 2.4  : chr [1:34] "I5d_11" "I5d_31" "I5d_37" "I5d_52" ...
+  .. .. ..$ 4.8  : chr [1:16] "I5d_25" "I5d_32" "I5d_42" "I5d_52" ...
+  .. .. ..$ 1.8  : chr [1:4] "I5d_36" "II5d_52" "V5d_42" "V5d_72"
+  .. .. ..$ 4.9  : chr [1:4] "I5d_38" "I5d_52" "III5d_82" "V5d_82"
+  .. .. ..$ 3.12 : chr [1:6] "I5d_45" "I5d_60" "II5d_56" "II5d_59" ...
+  .. .. ..$ 1.10 : chr [1:2] "I5d_47" "II5d_52"
+  .. .. ..$ 2.10 : chr [1:2] "I5d_47" "II5d_61"
+  .. .. ..$ 3.10 : chr [1:2] "I5d_47" "II5d_56"
+  .. .. ..$ 4.10 : chr [1:2] "I5d_47" "I5d_52"
+  .. .. ..$ 5.10 : chr [1:2] "I5d_47" "V5d_39"
+  .. .. ..$ 6.10 : chr [1:2] "I5d_47" "II5d_90"
+  .. .. ..$ 8.10 : chr [1:2] "I5d_47" "V5d_42"
+  .. .. ..$ 9.10 : chr [1:2] "I5d_47" "III5d_82"
+  .. .. ..$ 10.11: chr [1:22] "I5d_47" "I5d_51" "II5d_2" "II5d_14" ...
+  .. .. ..$ 10.12: chr [1:22] "I5d_47" "I5d_62" "I5d_70" "I5d_87" ...
+  .. .. ..$ 3.8  : chr [1:8] "I5d_49" "II5d_56" "IV5d_37" "V5d_38" ...
+  .. .. ..$ 1.4  : chr [1:4] "I5d_52" "II5d_52" "III5d_15" "III5d_52"
+  .. .. ..$ 4.5  : chr [1:3] "I5d_52" "IV5d_2" "V5d_39"
+  .. .. ..$ 4.6  : chr [1:3] "I5d_52" "II5d_90" "III5d_17"
+  .. .. ..$ 4.11 : chr [1:2] "I5d_52" "III5d_72"
+  .. .. ..$ 4.12 : chr [1:2] "I5d_52" "V5d_66"
+  .. .. ..$ 3.9  : chr [1:9] "I5d_54" "I5d_79" "II5d_51" "II5d_56" ...
+  .. .. ..$ 9.11 : chr [1:3] "I5d_55" "III5d_72" "III5d_82"
+  .. .. ..$ 8.11 : chr [1:7] "II5d_39" "II5d_73" "III5d_72" "V5d_36" ...
+  .. .. ..$ 1.2  : chr [1:2] "II5d_52" "II5d_61"
+  .. .. ..$ 1.5  : chr [1:2] "II5d_52" "V5d_39"
+  .. .. ..$ 1.9  : chr [1:2] "II5d_52" "III5d_82"
+  .. .. ..$ 1.11 : chr [1:2] "II5d_52" "III5d_72"
+  .. .. ..$ 1.12 : chr [1:2] "II5d_52" "V5d_66"
+  .. .. ..$ 2.12 : chr [1:4] "II5d_54" "II5d_61" "IV5d_36" "V5d_66"
+  .. .. ..$ 3.6  : chr [1:2] "II5d_56" "II5d_90"
+  .. .. ..$ 3.11 : chr [1:2] "II5d_56" "III5d_72"
+  .. .. ..$ 2.5  : chr [1:2] "II5d_61" "V5d_39"
+  .. .. ..$ 2.6  : chr [1:2] "II5d_61" "II5d_90"
+  .. .. ..$ 2.8  : chr [1:12] "II5d_61" "III5d_96" "IV5d_1" "IV5d_10" ...
+  .. .. ..$ 2.9  : chr [1:4] "II5d_61" "II5d_79" "III5d_82" "IV5d_6"
+  .. .. ..$ 2.11 : chr [1:2] "II5d_61" "III5d_72"
+  .. .. ..$ 8.12 : chr [1:3] "II5d_83" "V5d_42" "V5d_66"
+  .. .. ..$ 5.6  : chr [1:2] "II5d_90" "V5d_39"
+  .. .. ..$ 6.8  : chr [1:2] "II5d_90" "V5d_42"
+  .. .. ..$ 6.9  : chr [1:2] "II5d_90" "III5d_82"
+  .. .. ..$ 6.11 : chr [1:2] "II5d_90" "III5d_72"
+  .. .. ..$ 6.12 : chr [1:2] "II5d_90" "V5d_66"
+  .. .. ..$ 5.11 : chr [1:2] "III5d_72" "V5d_39"
+  .. .. ..$ 11.12: chr [1:2] "III5d_72" "V5d_66"
+  .. .. ..$ 5.9  : chr [1:2] "III5d_82" "V5d_39"
+  .. .. ..$ 8.9  : chr [1:2] "III5d_82" "V5d_42"
+  .. .. ..$ 9.12 : chr [1:2] "III5d_82" "V5d_66"
+  .. .. ..$ 5.8  : chr [1:5] "V5d_18" "V5d_29" "V5d_39" "V5d_42" ...
+  .. .. ..$ 5.12 : chr [1:2] "V5d_39" "V5d_66"
+  .. ..$ l:List of 55
+  .. .. ..$ 1.3  : num [1:31] 0.274 0.562 0.332 0.661 0.212 ...
+  .. .. ..$ 2.3  : num [1:26] 0.3703 0.4084 0.2295 0.5285 0.0692 ...
+  .. .. ..$ 3.5  : num [1:57] 0.408 0.494 0.464 0.574 0.123 ...
+  .. .. ..$ 1.6  : num [1:17] 0.279 0.759 0.968 0.715 0.989 ...
+  .. .. ..$ 3.4  : num [1:11] 0.769 0.77 1 0.791 0.595 ...
+  .. .. ..$ 2.4  : num [1:34] 0.537 0.615 0.332 1 0.83 ...
+  .. .. ..$ 4.8  : num [1:16] 0.415 0.152 0.152 0 0.358 ...
+  .. .. ..$ 1.8  : num [1:4] 0.6 0 1 0.54
+  .. .. ..$ 4.9  : num [1:4] 0.518 0 1 0.885
+  .. .. ..$ 3.12 : num [1:6] 0.451 0.673 0 0.549 0.651 ...
+  .. .. ..$ 1.10 : num [1:2] 1 0
+  .. .. ..$ 2.10 : num [1:2] 1 0
+  .. .. ..$ 3.10 : num [1:2] 1 0
+  .. .. ..$ 4.10 : num [1:2] 1 0
+  .. .. ..$ 5.10 : num [1:2] 1 0
+  .. .. ..$ 6.10 : num [1:2] 1 0
+  .. .. ..$ 8.10 : num [1:2] 1 0
+  .. .. ..$ 9.10 : num [1:2] 1 0
+  .. .. ..$ 10.11: num [1:22] 0 0.983 1.009 0.984 1.02 ...
+  .. .. ..$ 10.12: num [1:22] 0 0.7293 0.5414 0.7105 0.0693 ...
+  .. .. ..$ 3.8  : num [1:8] 0.424 0 0.554 0.516 1 ...
+  .. .. ..$ 1.4  : num [1:4] 1 0 0.576 0.433
+  .. .. ..$ 4.5  : num [1:3] 0 0.332 1
+  .. .. ..$ 4.6  : num [1:3] 0 1 0.855
+  .. .. ..$ 4.11 : num [1:2] 0 1
+  .. .. ..$ 4.12 : num [1:2] 0 1
+  .. .. ..$ 3.9  : num [1:9] 0.755 0.452 0.494 0 0.297 ...
+  .. .. ..$ 9.11 : num [1:3] 0.234 1 0
+  .. .. ..$ 8.11 : num [1:7] 0.594 0.419 1 0.267 0.648 ...
+  .. .. ..$ 1.2  : num [1:2] 0 1
+  .. .. ..$ 1.5  : num [1:2] 0 1
+  .. .. ..$ 1.9  : num [1:2] 0 1
+  .. .. ..$ 1.11 : num [1:2] 0 1
+  .. .. ..$ 1.12 : num [1:2] 0 1
+  .. .. ..$ 2.12 : num [1:4] 0.407 0 0.775 1
+  .. .. ..$ 3.6  : num [1:2] 0 1
+  .. .. ..$ 3.11 : num [1:2] 0 1
+  .. .. ..$ 2.5  : num [1:2] 0 1
+  .. .. ..$ 2.6  : num [1:2] 0 1
+  .. .. ..$ 2.8  : num [1:12] 0 0.459 0.465 0.549 0.421 ...
+  .. .. ..$ 2.9  : num [1:4] 0 0.813 1 0.519
+  .. .. ..$ 2.11 : num [1:2] 0 1
+  .. .. ..$ 8.12 : num [1:3] 0.377 0 1
+  .. .. ..$ 5.6  : num [1:2] 1 0
+  .. .. ..$ 6.8  : num [1:2] 0 1
+  .. .. ..$ 6.9  : num [1:2] 0 1
+  .. .. ..$ 6.11 : num [1:2] 0 1
+  .. .. ..$ 6.12 : num [1:2] 0 1
+  .. .. ..$ 5.11 : num [1:2] 1 0
+  .. .. ..$ 11.12: num [1:2] 0 1
+  .. .. ..$ 5.9  : num [1:2] 1 0
+  .. .. ..$ 8.9  : num [1:2] 1 0
+  .. .. ..$ 9.12 : num [1:2] 0 1
+  .. .. ..$ 5.8  : num [1:5] 0.356 0.56 0 1 0.67
+  .. .. ..$ 5.12 : num [1:2] 0 1
+  ..@ cdata  :List of 7
+  .. ..$ counts   :'data.frame':	11 obs. of  11 variables:
+  .. .. ..$ cl.1 : num [1:11] 0 0 17 1 0 13 2 0 0 0 ...
+  .. .. ..$ cl.2 : num [1:11] 0 0 5 18 0 0 5 2 0 0 ...
+  .. .. ..$ cl.3 : num [1:11] 12 19 0 7 22 0 4 5 0 0 ...
+  .. .. ..$ cl.4 : num [1:11] 1 14 2 0 0 1 6 2 0 0 ...
+  .. .. ..$ cl.5 : num [1:11] 0 0 33 1 0 0 2 0 0 0 ...
+  .. .. ..$ cl.6 : num [1:11] 2 0 0 0 0 0 0 0 0 0 ...
+  .. .. ..$ cl.8 : num [1:11] 0 5 2 8 1 0 0 0 0 2 ...
+  .. .. ..$ cl.9 : num [1:11] 0 0 2 0 0 0 0 0 0 0 ...
+  .. .. ..$ cl.10: num [1:11] 0 0 0 0 0 0 0 0 0 19 ...
+  .. .. ..$ cl.11: num [1:11] 0 0 0 0 0 0 3 1 1 0 ...
+  .. .. ..$ cl.12: num [1:11] 0 1 1 0 0 0 1 0 8 0 ...
+  .. ..$ counts.br:'data.frame':	11 obs. of  11 variables:
+  .. .. ..$ cl.1 : num [1:11] 0.977 2.689 4.688 2.38 1.512 ...
+  .. .. ..$ cl.2 : num [1:11] 2.44 6.72 11.72 5.95 3.78 ...
+  .. .. ..$ cl.3 : num [1:11] 3.85 10.59 18.46 9.37 5.95 ...
+  .. .. ..$ cl.4 : num [1:11] 2.2 6.05 10.55 5.36 3.4 ...
+  .. .. ..$ cl.5 : num [1:11] 1.47 4.03 7.03 3.57 2.27 ...
+  .. .. ..$ cl.6 : num [1:11] 0.916 2.521 4.395 2.231 1.417 ...
+  .. .. ..$ cl.8 : num [1:11] 1.47 4.03 7.03 3.57 2.27 ...
+  .. .. ..$ cl.9 : num [1:11] 0.672 1.849 3.223 1.636 1.039 ...
+  .. .. ..$ cl.10: num [1:11] 0.611 1.681 2.93 1.488 0.945 ...
+  .. .. ..$ cl.11: num [1:11] 1.34 3.7 6.45 3.27 2.08 ...
+  .. .. ..$ cl.12: num [1:11] 1.04 2.86 4.98 2.53 1.61 ...
+  .. ..$ pv.e     : num [1:11, 1:11] 5.00e-01 1.00 2.38e-06 9.15e-01 1.00 ...
+  .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. ..$ : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4" ...
+  .. .. .. ..$ : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4" ...
+  .. ..$ pv.d     : num [1:11, 1:11] 0.5 0.0618 1 0.3024 0.2098 ...
+  .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. ..$ : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4" ...
+  .. .. .. ..$ : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4" ...
+  .. ..$ pvn.e    : num [1:11, 1:11] NA 1.00 2.38e-06 9.15e-01 1.00 ...
+  .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. ..$ : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4" ...
+  .. .. .. ..$ : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4" ...
+  .. ..$ pvn.d    : num [1:11, 1:11] NA 0.0618 1 0.3024 0.2098 ...
+  .. .. ..- attr(*, "dimnames")=List of 2
+  .. .. .. ..$ : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4" ...
+  .. .. .. ..$ : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4" ...
+  .. ..$ linkscore:'data.frame':	11 obs. of  11 variables:
+  .. .. ..$ cl.1 : logi [1:11] NA NA NA NA NA NA ...
+  .. .. ..$ cl.2 : num [1:11] 0 NA NA NA NA NA NA NA NA NA ...
+  .. .. ..$ cl.3 : num [1:11] 0.9 0.8 NA NA NA NA NA NA NA NA ...
+  .. .. ..$ cl.4 : num [1:11] 0 0.9 0 NA NA NA NA NA NA NA ...
+  .. .. ..$ cl.5 : num [1:11] 0 0 1 0 NA NA NA NA NA NA ...
+  .. .. ..$ cl.6 : num [1:11] 0.7 0 0 0 0 NA NA NA NA NA ...
+  .. .. ..$ cl.8 : num [1:11] 0 0 0 0 0 0 NA NA NA NA ...
+  .. .. ..$ cl.9 : num [1:11] 0 0 0 0 0 0 0 NA NA NA ...
+  .. .. ..$ cl.10: num [1:11] 0 0 0 0 0 0 0 0 NA NA ...
+  .. .. ..$ cl.11: num [1:11] 0 0 0 0 0 0 0 0 0.2 NA ...
+  .. .. ..$ cl.12: num [1:11] 0 0 0 0 0 0 0 0 0.9 0 ...
+#+end_example
+
+Let's summarise the above
+
++ Ltree with 10 slots
+  1) [0/18] sc     :Formal class 'SCseq' [package "RaceID"] with 18 slots
+     - [ ] expdata   :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+       + i       : int [1:961619] 30 101 116 127 151 171 183 234 248 344  .
+       + p       : int [1:432] 0 534 2832 6603 6666 10692 11984 13808 15517 20386  .
+       + Dim     : int [1:2] 20268 431
+       + Dimnames:List of 2
+         - : chr [1:20268] "1700047I17Rik2" "2610044O15Rik8" "2810047C21Rik1" "9930111J21Rik1"  .
+         - : chr [1:431] "I5d_2" "I5d_3" "I5d_4" "I5d_5"  .
+       + x       : num [1:961619] 1 1 1 1 1  .
+       + factors : list()
+     - [ ] ndata     :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+       + i       : int [1:876212] 16 26 30 35 37 38 44 77 91 102  .
+       + p       : int [1:288] 0 2298 6069 10095 11919 13628 18497 21411 25265 28324  .
+       + Dim     : int [1:2] 20268 287
+       + Dimnames:List of 2
+         - : chr [1:20268] "1700047I17Rik2" "2610044O15Rik8" "2810047C21Rik1" "9930111J21Rik1"  .
+         - : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+       + x       : num [1:876212] 0.000176 0.000176 0.000886 0.000176 0.000886  .
+       + factors : list()
+     - [ ] counts    : Named num [1:287] 5697 11803 14142 3801 3763  .
+       - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+     - [ ] genes     : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
+     - [ ] dimRed    : list()
+     - [ ] distances : num [1:287, 1:287] 0 0.358 0.201 0.232 0.457  .
+       - attr(*, "dimnames")=List of 2
+         - : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+         - : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+     - [ ] imputed   : list()
+     - [ ] tsne      :'data.frame':	287 obs. of  2 variables:
+       - V1: num [1:287] 1.633 -0.147 0.259 1.538 2.956  .
+       - V2: num [1:287] 9.722 0.917 6.539 11.574 -1.691  .
+     - [ ] fr        :'data.frame':	287 obs. of  2 variables:
+       - V1: num [1:287] -2.775 4.49 0.967 -4.075 4.585  .
+       - V2: num [1:287] -3.911 -3.383 -4.635 -5.193 -0.448  .
+     - [ ] cluster   :List of 5
+       - kpart   : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+         - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+       - jaccard : num [1:12] 0.574 0.666 0.539 0.772 0.303  .
+       - gap     :List of 4
+         - Tab       : num [1:30, 1:4] 4.43 4.26 4.18 4.04 3.93  .
+           - attr(*, "dimnames")=List of 2
+             - : NULL
+             - : chr [1:4] "logW" "E.logW" "gap" "SE.sim"
+         - n         : int 287
+         - B         : int 100
+         - FUNcluster:function (x, k)  
+         - attr(*, "class")= chr "clusGap"
+       - clb     :List of 31
+         - result       :List of 7
+           - result       :List of 3
+             - pamobject:List of 9
+               - medoids   : chr [1:12] "II5d_52" "II5d_61" "II5d_56" "I5d_52"  .
+               - id.med    : int [1:12] 110 119 114 40 250 137 276 252 192 35  .
+               - clustering: Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+                 - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+               - objective : Named num [1:2] 0.209 0.201
+                 - attr(*, "names")= chr [1:2] "build" "swap"
+               - isolation : Factor w/ 3 levels "no","L","L*": 1 1 1 1 1 1 3 1 1 1  .
+                 - attr(*, "names")= chr [1:12] "1" "2" "3" "4"  .
+               - clusinfo  : num [1:12, 1:5] 16 40 64 36 25 15 5 25 11 10  .
+                 - attr(*, "dimnames")=List of 2
+                   - : NULL
+                   - : chr [1:5] "size" "max_diss" "av_diss" "diameter"  .
+               - silinfo   :List of 3
+                 - widths         : num [1:287, 1:3] 1 1 1 1 1 1 1 1 1 1  .
+                   - attr(*, "dimnames")=List of 2
+                     - : chr [1:287] "III5d_54" "II5d_52" "I5d_8" "V5d_19"  .
+                     - : chr [1:3] "cluster" "neighbor" "sil_width"
+                 - clus.avg.widths: num [1:12] 0.1676 0.1226 0.0581 0.0929 0.1389  .
+                 - avg.width      : num 0.199
+               - diss      : NULL
+               - call      : language cluster::pam(x = as.dist(sdata), k = k, diss = TRUE)
+               - attr(*, "class")= chr [1:2] "pam" "partition"
+             - nc       : num 12
+             - crit     : num [1:12] 0 0 0 0 0 0 0 0 0 0  .
+           - nc           : num 12
+           - clusterlist  :List of 12
+             - : Named logi [1:287] TRUE FALSE FALSE TRUE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE TRUE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE TRUE FALSE FALSE TRUE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE TRUE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+             - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
+               - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+           - partition    : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+             - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+           - clustermethod: chr "pam/estimated k"
+           - criterion    : chr "asw"
+           - nccl         : num 12
+         - partition    : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+           - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+         - nc           : num 12
+         - nccl         : num 12
+         - clustermethod: chr "pam/estimated k"
+         - B            : num 50
+         - noisemethod  : logi FALSE
+         - bootmethod   : chr "boot"
+         - multipleboot : logi FALSE
+         - dissolution  : num 0.5
+         - recover      : num 0.75
+         - bootresult   : num [1:12, 1:50] 1 0.667 0.396 0.833 0.269  .
+         - bootmean     : num [1:12] 0.574 0.666 0.539 0.772 0.303  .
+         - bootbrd      : int [1:12] 20 10 23 3 44 0 0 34 29 13  .
+         - bootrecover  : int [1:12] 18 17 3 31 1 48 50 7 10 25  .
+         - jitterresult : NULL
+         - jittermean   : NULL
+         - jitterbrd    : NULL
+         - jitterrecover: NULL
+         - subsetresult : NULL
+         - subsetmean   : NULL
+         - subsetbrd    : NULL
+         - subsetrecover: NULL
+         - bojitresult  : NULL
+         - bojitmean    : NULL
+         - bojitbrd     : NULL
+         - bojitrecover : NULL
+         - noiseresult  : NULL
+         - noisemean    : NULL
+         - noisebrd     : NULL
+         - noiserecover : NULL
+         - attr(*, "class")= chr "clboot"
+       - features: chr [1:500] "Aadac" "Abcd3" "Abhd17a" "Abp1"  .
+     - [ ] background:List of 1
+       - vfit:List of 12
+         - coefficients : Named num [1:3] 1.12 1.2 0.11
+           - attr(*, "names")= chr [1:3] "(Intercept)" "ml" "I(ml^2)"
+         - residuals    : Named num [1:2089] 0.0673 -0.2633 -0.0872 -0.7967 -0.3425  .
+           - attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
+         - effects      : Named num [1:2089] -116.863 97.874 12.996 -0.795 -0.341  .
+           - attr(*, "names")= chr [1:2089] "(Intercept)" "ml" "I(ml^2)" ""  .
+         - rank         : int 3
+         - fitted.values: Named num [1:2089] 2.32 1.67 1.51 1.26 1.46  .
+           - attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
+         - assign       : int [1:3] 0 1 2
+         - qr           :List of 5
+           - qr   : num [1:2089, 1:3] -45.7056 0.0219 0.0219 0.0219 0.0219  .
+             - attr(*, "dimnames")=List of 2
+               - : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
+               - : chr [1:3] "(Intercept)" "ml" "I(ml^2)"
+             - attr(*, "assign")= int [1:3] 0 1 2
+           - qraux: num [1:3] 1.02 1.01 1
+           - pivot: int [1:3] 1 2 3
+           - tol  : num 1e-07
+           - rank : int 3
+           - attr(*, "class")= chr "qr"
+         - df.residual  : int 2086
+         - xlevels      : Named list()
+         - call         : language lm(formula = vl ~ ml   I(ml^2))
+         - terms        :Classes 'terms', 'formula'  language vl ~ ml   I(ml^2)
+           - attr(*, "variables")= language list(vl, ml, I(ml^2))
+           - attr(*, "factors")= int [1:3, 1:2] 0 1 0 0 0 1
+             - attr(*, "dimnames")=List of 2
+               - : chr [1:3] "vl" "ml" "I(ml^2)"
+               - : chr [1:2] "ml" "I(ml^2)"
+           - attr(*, "term.labels")= chr [1:2] "ml" "I(ml^2)"
+           - attr(*, "order")= int [1:2] 1 1
+           - attr(*, "intercept")= int 1
+           - attr(*, "response")= int 1
+           - attr(*, ".Environment")=<environment: 0x5605c74c8d78> 
+           - attr(*, "predvars")= language list(vl, ml, I(ml^2))
+           - attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
+             - attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
+         - model        :'data.frame':	2089 obs. of  3 variables:
+           - vl     : Named num [1:2089] 2.385 1.41 1.422 0.459 1.118  .
+             - attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
+           - ml     : Named num [1:2089] 0.92 0.441 0.312 0.108 0.274  .
+             - attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
+           +- I(ml^2): 'AsIs' Named num [1:2089] 0.845632 + 0.194108   0.097482   0.011769   0.075060    .
+             - attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
+           - attr(*, "terms")=Classes 'terms', 'formula'  language vl ~ ml   I(ml^2)
+             - attr(*, "variables")= language list(vl, ml, I(ml^2))
+             - attr(*, "factors")= int [1:3, 1:2] 0 1 0 0 0 1
+               - attr(*, "dimnames")=List of 2
+                 - : chr [1:3] "vl" "ml" "I(ml^2)"
+                 - : chr [1:2] "ml" "I(ml^2)"
+             - attr(*, "term.labels")= chr [1:2] "ml" "I(ml^2)"
+             - attr(*, "order")= int [1:2] 1 1
+             - attr(*, "intercept")= int 1
+             - attr(*, "response")= int 1
+             - attr(*, ".Environment")=<environment: 0x5605c74c8d78> 
+             - attr(*, "predvars")= language list(vl, ml, I(ml^2))
+             - attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
+               - attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
+         - attr(*, "class")= chr "lm"
+     - [ ] out       :List of 5
+       - out    : chr [1:4] "I5d_45" "I5d_78" "IV5d_33" "V5d_90"
+       - stest  : num [1:40] 287 36 20 13 11 8 7 5 4 4  .
+       - thr    : num [1:40] 0.5 0.25 0.125 0.0625 0.0312  .
+       - cprobs : Named num [1:287] 0.49984 0.49882 0.47232 0.49995 0.00243  .
+         - attr(*, "names")= chr [1:287] "I5d_3" "I5d_8" "I5d_39" "I5d_43"  .
+       - outgene:List of 12
+         - : num [1:38, 1:16] 0.377 0.361 0.333 0.272 0.236  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:38] "Adrm1" "Ap2m1" "Areg" "Atf3"  .
+             - : chr [1:16] "I5d_3" "I5d_8" "I5d_39" "I5d_43"  .
+         - : num [1:11, 1:40] 0.000233 0.174443 0.427421 0.169948 0.333055  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:11] "Adh1" "Lars2" "Nfkbia" "Nip7"  .
+             - : chr [1:40] "I5d_4" "I5d_30" "I5d_33" "I5d_37"  .
+         - : num [1:38, 1:64] 0.246 0.381 0.276 0.207 0.122  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:38] "Adh1" "Agr2" "Ahdc1" "Ascl2"  .
+             - : chr [1:64] "I5d_6" "I5d_10" "I5d_12" "I5d_13"  .
+         - : num [1:104, 1:36] 0.4319 0.2438 0.0873 0.2021 0.2149  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:104] "Ahdc1" "AI747448" "Aplp2" "Atf3"  .
+             - : chr [1:36] "I5d_9" "I5d_11" "I5d_23" "I5d_25"  .
+         - : num [1:15, 1:25] 0.103 0.421 0.349 0.462 0.496  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:15] "Fos" "H2-Aa" "H2-Ab1" "H2-DMa"  .
+             - : chr [1:25] "I5d_14" "I5d_50" "III5d_11" "III5d_75"  .
+         - : num [1:7, 1:15] 0.342 0.25 0.294 0.424 0.193  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:7] "Clca4" "Dmbt1" "Guca2a" "Hmgb2"  .
+             - : chr [1:15] "I5d_17" "I5d_24" "I5d_53" "I5d_64"  .
+         - : num 0
+         - : num [1:13, 1:25] 0.449 0.34 0.408 0.475 0.031  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:13] "Ahdc1" "Atf3" "Chgb" "Defa17"  .
+             - : chr [1:25] "I5d_36" "I5d_49" "II5d_23" "II5d_73"  .
+         - : num [1:4, 1:11] 0.1518 0.1105 0.0575 0.4454 0.447  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:4] "Ptchd1" "Rapgef4" "Rorb" "Tmem38b"
+             - : chr [1:11] "I5d_38" "I5d_54" "I5d_55" "I5d_79"  .
+         - : num [1:3, 1:10] 0.184 0.159 0.4 0.169 0.159  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:3] "AY761184" "Chgb" "Pla2g2a"
+             - : chr [1:10] "I5d_47" "I5d_90" "II5d_37" "II5d_46"  .
+         - : num [1:11, 1:22] 0.05855 0.44849 0.00179 0.32356 0.24655  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:11] "Ceacam10" "Chgb" "Defa20" "Defa21"  .
+             - : chr [1:22] "I5d_51" "II5d_2" "II5d_14" "II5d_28"  .
+         - : num [1:16, 1:18] 0.000305 0.297697 0.000703 0.340798 0.037162  .
+           - attr(*, "dimnames")=List of 2
+             - : chr [1:16] "Ang4" "Cd24a" "Ceacam10" "Chgb"  .
+             - : chr [1:18] "I5d_60" "I5d_62" "I5d_70" "I5d_87"  .
+     - [ ] cpart     : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+       - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+     - [ ] medoids   : chr [1:14] "II5d_52" "II5d_61" "II5d_56" "I5d_52"  .
+     - [ ] fcol      : chr [1:14] "#0024FFFF" "#00FF92FF" "#B600FFFF" "#00FF24FF"  .
+     - [ ] filterpar :List of 7
+       - mintotal : int 3000
+       - minexpr  : int 5
+       - minnumber: int 5
+       - CGenes   : NULL
+       - FGenes   : NULL
+       - BGenes   : NULL
+       - bmode    : chr "RaceID"
+     - [ ] clusterpar:List of 9
+       - clustnr   : num 30
+       - bootnr    : num 50
+       - samp      : NULL
+       - metric    : chr "pearson"
+       - sat       : logi TRUE
+       - cln       : NULL
+       - rseed     : num 17000
+       - FSelect   : logi TRUE
+       - FUNcluster: chr "kmedoids"
+     - [ ] outlierpar:List of 4
+       - outlg       : int 2
+       - probthr     : num 0.001
+       - thr         : num [1:40] 0.5 0.25 0.125 0.0625 0.0312  .
+       - outdistquant: num 0.95
+  2) [0/7] ldata  :List of 7
+     - [ ] lp  : Named int [1:278] 1 2 3 1 4 3 4 3 3 5  .
+       - attr(*, "names")= chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+     - [ ] ld  : num [1:278, 1:278] 0 0.358 0.201 0.232 0.457  .
+       - attr(*, "dimnames")=List of 2
+         - : chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+         - : chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+     - [ ] m   : int [1:11] 1 2 3 4 5 6 8 9 10 11  .
+     - [ ] pdi : num [1:278, 1:108] -0.231 -0.181 -0.212 -0.202 -0.119  .
+       - attr(*, "dimnames")=List of 2
+         - : chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+         - : NULL
+     - [ ] pdil:'data.frame':	278 obs. of  2 variables:
+       - V1: num [1:278] 1.633 -0.147 0.259 1.538 2.956  .
+       - V2: num [1:278] 9.722 0.917 6.539 11.574 -1.691  .
+     - [ ] cn  :'data.frame':	11 obs. of  108 variables:
+       - V1  : num [1:11] -0.21 -0.142 -0.175 -0.128 -0.202  .
+       - V2  : num [1:11] -0.0688 0.1266 -0.0287 0.125 -0.0892  .
+       - V3  : num [1:11] 0.1846 -0.16686 -0.02191 -0.02706 0.00761  .
+       - V4  : num [1:11] 0.0896 -0.0707 0.1626 -0.2123 0.2244  .
+       - V5  : num [1:11] 0.0355 0.0771 0.0386 0.0622 -0.0863  .
+       - V6  : num [1:11] -0.0495 0.0962 -0.0473 -0.173 0.0418  .
+       - V7  : num [1:11] 0.0142 0.031 0.0615 -0.0556 -0.0274  .
+       - V8  : num [1:11] -0.0794 0.0361 -0.0107 -0.0794 0.0277  .
+       - V9  : num [1:11] 0.09096 0.04261 -0.0126 -0.07568 0.00777  .
+       - V10 : num [1:11] 0.0703 0.0418 -0.0329 0.04 -0.0225  .
+       - V11 : num [1:11] 0.00305 0.01723 0.04593 0.02958 -0.01949  .
+       - V12 : num [1:11] 0.012209 -0.013318 -0.000702 0.086836 0.00677  .
+       - V13 : num [1:11] 0.05115 -0.02909 -0.01486 0.00539 -0.00845  .
+       - V14 : num [1:11] 0.000851 -0.017881 -0.01119 -0.01546 0.01306  .
+       - V15 : num [1:11] -0.01362 0.00688 -0.01548 -0.01088 -0.00999  .
+       - V16 : num [1:11] 0.03476 0.00426 0.00312 0.01996 0.00677  .
+       - V17 : num [1:11] -0.00831 -0.03181 0.000335 0.012551 0.003292  .
+       - V18 : num [1:11] 0.01421 -0.05371 0.00642 0.00928 -0.01266  .
+       - V19 : num [1:11] -0.00608 0.00653 -0.01766 0.00167 -0.00538  .
+       - V20 : num [1:11] -0.000326 0.004268 -0.00635 0.003193 -0.00883  .
+       - V21 : num [1:11] -0.01379 -0.03501 -0.02398 0.01406 0.00296  .
+       - V22 : num [1:11] 0.02337 -0.00215 -0.0073 -0.00893 0.00505  .
+       - V23 : num [1:11] 0.02278 -0.01209 -0.00213 0.00999 -0.00739  .
+       - V24 : num [1:11] -0.01788 0.01069 0.00934 -0.00753 0.012  .
+       - V25 : num [1:11] -0.000441 -0.004377 0.002733 0.024896 -0.005154  .
+       - V26 : num [1:11] 0.00681 0.02321 -0.01341 0.02783 0.0151  .
+       - V27 : num [1:11] 0.03912 0.01246 0.00637 -0.00767 -0.00226  .
+       - V28 : num [1:11] -0.01776 0.005 -0.01672 0.00345 -0.04536  .
+       - V29 : num [1:11] -0.0134 -0.00312 0.00752 -0.02439 0.01223  .
+       - V30 : num [1:11] -0.028781 0.002262 0.000972 -0.023205 -0.011164  .
+       - V31 : num [1:11] 0.00492 0.01089 0.00584 -0.01673 -0.0155  .
+       - V32 : num [1:11] 0.0094 0.027 -0.0199 -0.0092 -0.0037  .
+       - V33 : num [1:11] 1.32e-02 9.36e-05 4.14e-03 4.60e-03 1.08e-02  .
+       - V34 : num [1:11] 0.0105 -0.00682 0.00297 0.01438 -0.00716  .
+       - V35 : num [1:11] 0.00547 -0.018 -0.00703 -0.00602 0.00298  .
+       - V36 : num [1:11] 0.000401 -0.027679 -0.005411 0.020004 -0.02301  .
+       - V37 : num [1:11] -0.00896 -0.009695 0.000429 -0.009383 0.003242  .
+       - V38 : num [1:11] -0.00917 -0.02645 -0.00874 0.02057 0.00779  .
+       - V39 : num [1:11] -0.008777 -0.015131 -0.005637 0.000925 0.004372  .
+       - V40 : num [1:11] -0.00446 -0.01403 0.01705 0.00733 -0.01418  .
+       - V41 : num [1:11] 0.014452 -0.011496 -0.012947 0.007655 0.000406  .
+       - V42 : num [1:11] 0.02332 0.00766 0.01948 -0.00609 0.01014  .
+       - V43 : num [1:11] -0.01479 0.00441 0.00277 0.00006 -0.04215  .
+       - V44 : num [1:11] 0.0171 0.01666 -0.00253 -0.02128 -0.00446  .
+       - V45 : num [1:11] 0.01894 -0.00699 0.00659 0.0122 -0.00882  .
+       - V46 : num [1:11] -0.01031 -0.01345 -0.01387 0.00681 -0.00442  .
+       - V47 : num [1:11] 0.00378 0.00768 -0.00395 0.00964 -0.02624  .
+       - V48 : num [1:11] 0.007746 0.002372 -0.000891 0.008718 -0.014987  .
+       - V49 : num [1:11] -0.0241 -0.00145 0.01808 0.01495 -0.00789  .
+       - V50 : num [1:11] -0.000476 -0.01487 -0.008396 -0.011247 -0.027185  .
+       - V51 : num [1:11] 0.00503 0.02038 0.00855 -0.03816 -0.02445  .
+       - V52 : num [1:11] 0.02426 0.02533 0.00416 0.00618 0.015  .
+       - V53 : num [1:11] 0.01502 -0.00544 -0.0036 -0.01042 -0.0026  .
+       - V54 : num [1:11] 0.00522 -0.01458 0.0083 0.02064 -0.00484  .
+       - V55 : num [1:11] -0.01107 -0.02129 0.00053 -0.00353 -0.0157  .
+       - V56 : num [1:11] -0.01012 -0.00711 0.01264 -0.00948 -0.01433  .
+       - V57 : num [1:11] 0.00416 -0.00716 -0.00396 0.00633 -0.01141  .
+       - V58 : num [1:11] 0.0035 0.00651 -0.01486 0.0085 -0.02186  .
+       - V59 : num [1:11] -0.000025 0.01121 0.008682 0.005965 -0.008536  .
+       - V60 : num [1:11] 0.012156 0.000536 -0.016121 -0.007528 -0.016342  .
+       - V61 : num [1:11] -0.00855 -0.02104 -0.01223 -0.00841 0.00672  .
+       - V62 : num [1:11] -0.00546 -0.02531 -0.03168 0.00577 0.01157  .
+       - V63 : num [1:11] -0.0191 -0.0281 -0.0133 -0.0149 -0.0144  .
+       - V64 : num [1:11] -0.00367 -0.01584 -0.00551 0.01038 -0.00724  .
+       - V65 : num [1:11] -0.00233 0.00896 -0.01686 -0.02021 -0.00974  .
+       - V66 : num [1:11] -0.00525 0.00159 0.00378 0.00259 0.00731  .
+       - V67 : num [1:11] -0.01073 0.01686 0.02727 -0.01409 -0.00503  .
+       - V68 : num [1:11] -0.000456 0.001636 0.00242 0.004188 -0.016807  .
+       - V69 : num [1:11] -0.001525 0.003679 -0.000393 -0.002364 0.002244  .
+       - V70 : num [1:11] -0.01009 0.01274 0.01955 0.01341 0.00343  .
+       - V71 : num [1:11] 0.00547 0.02644 0.0031 0.00272 0.02675  .
+       - V72 : num [1:11] 0.00144 -0.00425 -0.00138 0.00595 0.00193  .
+       - V73 : num [1:11] 0.00389 -0.00828 -0.00469 -0.00632 0.00846  .
+       - V74 : num [1:11] -0.01141 0.00444 0.00817 0.01463 -0.0034  .
+       - V75 : num [1:11] -0.01227 -0.01089 -0.00345 -0.02274 -0.00375  .
+       - V76 : num [1:11] 0.004631 -0.000368 0.003108 0.013551 -0.011997  .
+       - V77 : num [1:11] -0.00651 -0.01665 -0.00801 -0.00625 -0.00683  .
+       - V78 : num [1:11] 0.00283 0.00435 -0.00111 0.02024 0.00613  .
+       - V79 : num [1:11] 0.002513 0.011839 0.009917 0.008041 -0.000337  .
+       - V80 : num [1:11] -5.62e-03 -8.54e-03 -4.38e-03 6.09e-03 4.46e-06  .
+       - V81 : num [1:11] -4.28e-05 5.05e-03 -5.49e-03 2.99e-04 6.79e-03  .
+       - V82 : num [1:11] 0.00545 -0.00351 -0.00122 -0.01324 0.00111  .
+       - V83 : num [1:11] 0.0161 -0.0129 -0.0159 -0.0217 -0.0209  .
+       - V84 : num [1:11] -0.00197 0.00846 0.01585 -0.00647 0.00421  .
+       - V85 : num [1:11] 0.008276 -0.000932 -0.010438 0.001787 -0.007416  .
+       - V86 : num [1:11] -0.00809 0.00436 0.00605 -0.00172 0.0055  .
+       - V87 : num [1:11] -0.00181 -0.01198 -0.00181 0.00743 0.00417  .
+       - V88 : num [1:11] 0.002435 0.000644 0.002968 0.008076 0.019435  .
+       - V89 : num [1:11] -0.01133 -0.00644 -0.01211 0.0062 -0.00402  .
+       - V90 : num [1:11] -0.00209 -0.00147 -0.00468 -0.00719 -0.00877  .
+       - V91 : num [1:11] -0.000592 -0.014395 -0.007306 0.002176 0.016773  .
+       - V92 : num [1:11] -0.00927 -0.00429 0.00914 0.00687 0.00974  .
+       - V93 : num [1:11] 0.00196 -0.01118 -0.00246 0.00957 -0.00633  .
+       - V94 : num [1:11] -0.00297 0.00141 -0.0111 -0.00301 0.005  .
+       - V95 : num [1:11] -0.00303 0.01921 -0.0146 -0.00698 -0.00731  .
+       - V96 : num [1:11] 0.00184 -0.00918 -0.00684 -0.00536 -0.00241  .
+       - V97 : num [1:11] -0.00621 -0.00757 0.00498 -0.00838 0.00859  .
+       - V98 : num [1:11] -0.00255 -0.00757 0.00859 -0.00198 0.0128  .
+       - V99 : num [1:11] 0.00107 0.00494 -0.00908 -0.00182 0.00433  .
+        [list output truncated]
+     - [ ] cnl :'data.frame':	11 obs. of  2 variables:
+       - V1: num [1:11] 1.92 -2.17 1.27 2 -0.84  .
+       - V2: num [1:11] 10.1 -1.18 5.78 -2.7 6.84  .
+  3) [ ] entropy: Named num [1:287] 0.721 0.745 0.746 0.713 0.685  .
+     - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+  4) [0/3] trproj :List of 3
+     - [ ] res:'data.frame':	278 obs. of  3 variables:
+       - o: int [1:278] 1 2 3 1 4 3 4 3 3 5  .
+       - l: num [1:278] 3 3 5 6 3 1 2 5 5 3  .
+       - h: num [1:278] 0.352 0.445 0.513 0.575 0.265  .
+     - [ ] rma:'data.frame':	278 obs. of  11 variables:
+       - X1 : num [1:278] NA 0.417 0.189 NA 0.338  .
+       - X2 : num [1:278] 0.0184 NA 0.2104 -0.1375 0.1015  .
+       - X3 : num [1:278] 0.352 0.445 NA -0.109 0.265  .
+       - X4 : num [1:278] 0.0304 0.4035 0.1318 0.0615 NA  .
+       - X5 : num [1:278] 0.46266 0.54261 0.51256 -0.00158 0.2742  .
+       - X6 : num [1:278] 0.0184 0.2764 0.1619 0.5747 0.3162  .
+       - X8 : num [1:278] -0.0469 0.3898 0.1195 -0.1246 0.1944  .
+       - X9 : num [1:278] 0.08207 0.01157 0.00509 -0.15726 0.11963  .
+       - X10: num [1:278] 0.1579 0.2216 0.0819 0.0795 0.213  .
+       - X11: num [1:278] -0.0143 0.0754 -0.0922 0.0196 0.1136  .
+       - X12: num [1:278] 0.2608 0.3593 0.2216 0.0334 0.3357  .
+     - [ ] d  :List of 2
+       - v   :'data.frame':	3058 obs. of  108 variables:
+         - V1  : num [1:3058] 0 0.06745 0.03466 0.08132 0.00764  .
+         - V2  : num [1:3058] 0 0.1954 0.0402 0.1939 -0.0204  .
+         - V3  : num [1:3058] 0 -0.351 -0.207 -0.212 -0.177  .
+         - V4  : num [1:3058] 0 -0.16 0.073 -0.302 0.135  .
+         - V5  : num [1:3058] 0 0.04157 0.00308 0.02675 -0.12178  .
+         - V6  : num [1:3058] 0 0.14571 0.00217 -0.12349 0.09128  .
+         - V7  : num [1:3058] 0 0.0168 0.0473 -0.0698 -0.0416  .
+         - V8  : num [1:3058] 0.00 1.15e-01 6.86e-02 -8.64e-06 1.07e-01  .
+         - V9  : num [1:3058] 0 -0.0484 -0.1036 -0.1666 -0.0832  .
+         - V10 : num [1:3058] 0 -0.0286 -0.1033 -0.0304 -0.0929  .
+         - V11 : num [1:3058] 0 0.0142 0.0429 0.0265 -0.0225  .
+         - V12 : num [1:3058] 0 -0.02553 -0.01291 0.07463 -0.00544  .
+         - V13 : num [1:3058] 0 -0.0802 -0.066 -0.0458 -0.0596  .
+         - V14 : num [1:3058] 0 -0.0187 -0.012 -0.0163 0.0122  .
+         - V15 : num [1:3058] 0 0.0205 -0.00187 0.00274 0.00363  .
+         - V16 : num [1:3058] 0 -0.0305 -0.0316 -0.0148 -0.028  .
+         - V17 : num [1:3058] 0 -0.0235 0.00865 0.02086 0.0116  .
+         - V18 : num [1:3058] 0 -0.06792 -0.00779 -0.00493 -0.02687  .
+         - V19 : num [1:3058] 0 0.012607 -0.011578 0.007749 0.000696  .
+         - V20 : num [1:3058] 0 0.00459 -0.00602 0.00352 -0.0085  .
+         - V21 : num [1:3058] 0 -0.0212 -0.0102 0.0279 0.0167  .
+         - V22 : num [1:3058] 0 -0.0255 -0.0307 -0.0323 -0.0183  .
+         - V23 : num [1:3058] 0 -0.0349 -0.0249 -0.0128 -0.0302  .
+         - V24 : num [1:3058] 0 0.0286 0.0272 0.0103 0.0299  .
+         - V25 : num [1:3058] 0 -0.00394 0.00317 0.02534 -0.00471  .
+         - V26 : num [1:3058] 0 0.0164 -0.02022 0.02101 0.00829  .
+         - V27 : num [1:3058] 0 -0.0267 -0.0328 -0.0468 -0.0414  .
+         - V28 : num [1:3058] 0 0.02275 0.00104 0.02121 -0.02761  .
+         - V29 : num [1:3058] 0 0.0103 0.0209 -0.011 0.0256  .
+         - V30 : num [1:3058] 0 0.03104 0.02975 0.00558 0.01762  .
+         - V31 : num [1:3058] 0 0.005969 0.000924 -0.021647 -0.020421  .
+         - V32 : num [1:3058] 0 0.0176 -0.0293 -0.0186 -0.0131  .
+         - V33 : num [1:3058] 0 -0.01314 -0.00909 -0.00863 -0.00247  .
+         - V34 : num [1:3058] 0 -0.01731 -0.00753 0.00388 -0.01766  .
+         - V35 : num [1:3058] 0 -0.0235 -0.0125 -0.0115 -0.0025  .
+         - V36 : num [1:3058] 0 -0.02808 -0.00581 0.0196 -0.02341  .
+         - V37 : num [1:3058] 0 -0.000735 0.009389 -0.000422 0.012202  .
+         - V38 : num [1:3058] 0 -0.017278 0.000435 0.029739 0.016961  .
+         - V39 : num [1:3058] 0 -0.00635 0.00314 0.0097 0.01315  .
+         - V40 : num [1:3058] 0 -0.00957 0.02151 0.01179 -0.00972  .
+         - V41 : num [1:3058] 0 -0.0259 -0.0274 -0.0068 -0.014  .
+         - V42 : num [1:3058] 0 -0.01566 -0.00384 -0.02941 -0.01318  .
+         - V43 : num [1:3058] 0 0.0192 0.0176 0.0149 -0.0274  .
+         - V44 : num [1:3058] 0 -0.000433 -0.019627 -0.038379 -0.021553  .
+         - V45 : num [1:3058] 0 -0.02593 -0.01236 -0.00674 -0.02776  .
+         - V46 : num [1:3058] 0 -0.00314 -0.00355 0.01712 0.00589  .
+         - V47 : num [1:3058] 0 0.0039 -0.00773 0.00586 -0.03002  .
+         - V48 : num [1:3058] 0 -0.005375 -0.008637 0.000972 -0.022734  .
+         - V49 : num [1:3058] 0 0.0226 0.0422 0.0391 0.0162  .
+         - V50 : num [1:3058] 0 -0.01439 -0.00792 -0.01077 -0.02671  .
+         - V51 : num [1:3058] 0 0.01535 0.00352 -0.04319 -0.02948  .
+         - V52 : num [1:3058] 0 0.00108 -0.0201 -0.01807 -0.00925  .
+         - V53 : num [1:3058] 0 -0.0205 -0.0186 -0.0254 -0.0176  .
+         - V54 : num [1:3058] 0 -0.0198 0.00307 0.01542 -0.01006  .
+         - V55 : num [1:3058] 0 -0.01023 0.0116 0.00754 -0.00464  .
+         - V56 : num [1:3058] 0 0.003006 0.022755 0.000632 -0.004214  .
+         - V57 : num [1:3058] 0 -0.01132 -0.00812 0.00217 -0.01557  .
+         - V58 : num [1:3058] 0 0.00301 -0.01836 0.005 -0.02536  .
+         - V59 : num [1:3058] 0 0.01123 0.00871 0.00599 -0.00851  .
+         - V60 : num [1:3058] 0 -0.0116 -0.0283 -0.0197 -0.0285  .
+         - V61 : num [1:3058] 0 -0.012491 -0.003681 0.000143 0.015277  .
+         - V62 : num [1:3058] 0 -0.0199 -0.0262 0.0112 0.017  .
+         - V63 : num [1:3058] 0 -0.00908 0.00572 0.00417 0.00462  .
+         - V64 : num [1:3058] 0 -0.01217 -0.00184 0.01406 -0.00357  .
+         - V65 : num [1:3058] 0 0.01129 -0.01452 -0.01788 -0.00741  .
+         - V66 : num [1:3058] 0 0.00684 0.00903 0.00784 0.01256  .
+         - V67 : num [1:3058] 0 0.02759 0.038 -0.00336 0.0057  .
+         - V68 : num [1:3058] 0 0.00209 0.00288 0.00464 -0.01635  .
+         - V69 : num [1:3058] 0 0.005205 0.001133 -0.000839 0.003769  .
+         - V70 : num [1:3058] 0 0.0228 0.0296 0.0235 0.0135  .
+         - V71 : num [1:3058] 0 0.02097 -0.00237 -0.00275 0.02128  .
+         - V72 : num [1:3058] 0 -0.005684 -0.002812 0.004514 0.000491  .
+         - V73 : num [1:3058] 0 -0.01216 -0.00858 -0.0102 0.00458  .
+         - V74 : num [1:3058] 0 0.01585 0.01958 0.02604 0.00801  .
+         - V75 : num [1:3058] 0 0.00138 0.00882 -0.01046 0.00852  .
+         - V76 : num [1:3058] 0 -0.005 -0.00152 0.00892 -0.01663  .
+         - V77 : num [1:3058] 0 -0.010145 -0.001496 0.000265 -0.000319  .
+         - V78 : num [1:3058] 0 0.00152 -0.00394 0.01741 0.0033  .
+         - V79 : num [1:3058] 0 0.00933 0.0074 0.00553 -0.00285  .
+         - V80 : num [1:3058] 0 -0.00292 0.00124 0.01171 0.00562  .
+         - V81 : num [1:3058] 0 0.005094 -0.005452 0.000342 0.006831  .
+         - V82 : num [1:3058] 0 -0.00896 -0.00667 -0.0187 -0.00434  .
+         - V83 : num [1:3058] 0 -0.029 -0.032 -0.0378 -0.037  .
+         - V84 : num [1:3058] 0 0.01043 0.01781 -0.0045 0.00618  .
+         - V85 : num [1:3058] 0 -0.00921 -0.01871 -0.00649 -0.01569  .
+         - V86 : num [1:3058] 0 0.01245 0.01414 0.00636 0.01358  .
+         - V87 : num [1:3058] 0.00 -1.02e-02 6.92e-06 9.24e-03 5.98e-03  .
+         - V88 : num [1:3058] 0 -0.00179 0.000533 0.005642 0.017001  .
+         - V89 : num [1:3058] 0 0.004892 -0.000771 0.017539 0.007315  .
+         - V90 : num [1:3058] 0 0.000621 -0.002584 -0.005096 -0.006679  .
+         - V91 : num [1:3058] 0 -0.0138 -0.00671 0.00277 0.01736  .
+         - V92 : num [1:3058] 0 0.00498 0.01841 0.01614 0.01901  .
+         - V93 : num [1:3058] 0 -0.01314 -0.00442 0.00761 -0.00829  .
+         - V94 : num [1:3058] 0.00 4.37e-03 -8.13e-03 -4.06e-05 7.97e-03  .
+         - V95 : num [1:3058] 0 0.02224 -0.01157 -0.00395 -0.00428  .
+         - V96 : num [1:3058] 0 -0.01102 -0.00868 -0.0072 -0.00425  .
+         - V97 : num [1:3058] 0 -0.00136 0.01119 -0.00217 0.01479  .
+         - V98 : num [1:3058] 0 -0.005018 0.011138 0.000566 0.015351  .
+         - V99 : num [1:3058] 0 0.00387 -0.01016 -0.00289 0.00325  .
+          [list output truncated]
+       - pdcn:'data.frame':	3058 obs. of  108 variables:
+         - V1  : num [1:3058] -0.21 -0.21 -0.21 -0.21 -0.21  .
+         - V2  : num [1:3058] -0.0688 -0.0688 -0.0688 -0.0688 -0.0688  .
+         - V3  : num [1:3058] 0.185 0.185 0.185 0.185 0.185  .
+         - V4  : num [1:3058] 0.0896 0.0896 0.0896 0.0896 0.0896  .
+         - V5  : num [1:3058] 0.0355 0.0355 0.0355 0.0355 0.0355  .
+         - V6  : num [1:3058] -0.0495 -0.0495 -0.0495 -0.0495 -0.0495  .
+         - V7  : num [1:3058] 0.0142 0.0142 0.0142 0.0142 0.0142  .
+         - V8  : num [1:3058] -0.0794 -0.0794 -0.0794 -0.0794 -0.0794  .
+         - V9  : num [1:3058] 0.091 0.091 0.091 0.091 0.091  .
+         - V10 : num [1:3058] 0.0703 0.0703 0.0703 0.0703 0.0703  .
+         - V11 : num [1:3058] 0.00305 0.00305 0.00305 0.00305 0.00305  .
+         - V12 : num [1:3058] 0.0122 0.0122 0.0122 0.0122 0.0122  .
+         - V13 : num [1:3058] 0.0512 0.0512 0.0512 0.0512 0.0512  .
+         - V14 : num [1:3058] 0.000851 0.000851 0.000851 0.000851 0.000851  .
+         - V15 : num [1:3058] -0.0136 -0.0136 -0.0136 -0.0136 -0.0136  .
+         - V16 : num [1:3058] 0.0348 0.0348 0.0348 0.0348 0.0348  .
+         - V17 : num [1:3058] -0.00831 -0.00831 -0.00831 -0.00831 -0.00831  .
+         - V18 : num [1:3058] 0.0142 0.0142 0.0142 0.0142 0.0142  .
+         - V19 : num [1:3058] -0.00608 -0.00608 -0.00608 -0.00608 -0.00608  .
+         - V20 : num [1:3058] -0.000326 -0.000326 -0.000326 -0.000326 -0.000326  .
+         - V21 : num [1:3058] -0.0138 -0.0138 -0.0138 -0.0138 -0.0138  .
+         - V22 : num [1:3058] 0.0234 0.0234 0.0234 0.0234 0.0234  .
+         - V23 : num [1:3058] 0.0228 0.0228 0.0228 0.0228 0.0228  .
+         - V24 : num [1:3058] -0.0179 -0.0179 -0.0179 -0.0179 -0.0179  .
+         - V25 : num [1:3058] -0.000441 -0.000441 -0.000441 -0.000441 -0.000441  .
+         - V26 : num [1:3058] 0.00681 0.00681 0.00681 0.00681 0.00681  .
+         - V27 : num [1:3058] 0.0391 0.0391 0.0391 0.0391 0.0391  .
+         - V28 : num [1:3058] -0.0178 -0.0178 -0.0178 -0.0178 -0.0178  .
+         - V29 : num [1:3058] -0.0134 -0.0134 -0.0134 -0.0134 -0.0134  .
+         - V30 : num [1:3058] -0.0288 -0.0288 -0.0288 -0.0288 -0.0288  .
+         - V31 : num [1:3058] 0.00492 0.00492 0.00492 0.00492 0.00492  .
+         - V32 : num [1:3058] 0.0094 0.0094 0.0094 0.0094 0.0094  .
+         - V33 : num [1:3058] 0.0132 0.0132 0.0132 0.0132 0.0132  .
+         - V34 : num [1:3058] 0.0105 0.0105 0.0105 0.0105 0.0105  .
+         - V35 : num [1:3058] 0.00547 0.00547 0.00547 0.00547 0.00547  .
+         - V36 : num [1:3058] 0.000401 0.000401 0.000401 0.000401 0.000401  .
+         - V37 : num [1:3058] -0.00896 -0.00896 -0.00896 -0.00896 -0.00896  .
+         - V38 : num [1:3058] -0.00917 -0.00917 -0.00917 -0.00917 -0.00917  .
+         - V39 : num [1:3058] -0.00878 -0.00878 -0.00878 -0.00878 -0.00878  .
+         - V40 : num [1:3058] -0.00446 -0.00446 -0.00446 -0.00446 -0.00446  .
+         - V41 : num [1:3058] 0.0145 0.0145 0.0145 0.0145 0.0145  .
+         - V42 : num [1:3058] 0.0233 0.0233 0.0233 0.0233 0.0233  .
+         - V43 : num [1:3058] -0.0148 -0.0148 -0.0148 -0.0148 -0.0148  .
+         - V44 : num [1:3058] 0.0171 0.0171 0.0171 0.0171 0.0171  .
+         - V45 : num [1:3058] 0.0189 0.0189 0.0189 0.0189 0.0189  .
+         - V46 : num [1:3058] -0.0103 -0.0103 -0.0103 -0.0103 -0.0103  .
+         - V47 : num [1:3058] 0.00378 0.00378 0.00378 0.00378 0.00378  .
+         - V48 : num [1:3058] 0.00775 0.00775 0.00775 0.00775 0.00775  .
+         - V49 : num [1:3058] -0.0241 -0.0241 -0.0241 -0.0241 -0.0241  .
+         - V50 : num [1:3058] -0.000476 -0.000476 -0.000476 -0.000476 -0.000476  .
+         - V51 : num [1:3058] 0.00503 0.00503 0.00503 0.00503 0.00503  .
+         - V52 : num [1:3058] 0.0243 0.0243 0.0243 0.0243 0.0243  .
+         - V53 : num [1:3058] 0.015 0.015 0.015 0.015 0.015  .
+         - V54 : num [1:3058] 0.00522 0.00522 0.00522 0.00522 0.00522  .
+         - V55 : num [1:3058] -0.0111 -0.0111 -0.0111 -0.0111 -0.0111  .
+         - V56 : num [1:3058] -0.0101 -0.0101 -0.0101 -0.0101 -0.0101  .
+         - V57 : num [1:3058] 0.00416 0.00416 0.00416 0.00416 0.00416  .
+         - V58 : num [1:3058] 0.0035 0.0035 0.0035 0.0035 0.0035  .
+         - V59 : num [1:3058] -2.5e-05 -2.5e-05 -2.5e-05 -2.5e-05 -2.5e-05  .
+         - V60 : num [1:3058] 0.0122 0.0122 0.0122 0.0122 0.0122  .
+         - V61 : num [1:3058] -0.00855 -0.00855 -0.00855 -0.00855 -0.00855  .
+         - V62 : num [1:3058] -0.00546 -0.00546 -0.00546 -0.00546 -0.00546  .
+         - V63 : num [1:3058] -0.0191 -0.0191 -0.0191 -0.0191 -0.0191  .
+         - V64 : num [1:3058] -0.00367 -0.00367 -0.00367 -0.00367 -0.00367  .
+         - V65 : num [1:3058] -0.00233 -0.00233 -0.00233 -0.00233 -0.00233  .
+         - V66 : num [1:3058] -0.00525 -0.00525 -0.00525 -0.00525 -0.00525  .
+         - V67 : num [1:3058] -0.0107 -0.0107 -0.0107 -0.0107 -0.0107  .
+         - V68 : num [1:3058] -0.000456 -0.000456 -0.000456 -0.000456 -0.000456  .
+         - V69 : num [1:3058] -0.00153 -0.00153 -0.00153 -0.00153 -0.00153  .
+         - V70 : num [1:3058] -0.0101 -0.0101 -0.0101 -0.0101 -0.0101  .
+         - V71 : num [1:3058] 0.00547 0.00547 0.00547 0.00547 0.00547  .
+         - V72 : num [1:3058] 0.00144 0.00144 0.00144 0.00144 0.00144  .
+         - V73 : num [1:3058] 0.00389 0.00389 0.00389 0.00389 0.00389  .
+         - V74 : num [1:3058] -0.0114 -0.0114 -0.0114 -0.0114 -0.0114  .
+         - V75 : num [1:3058] -0.0123 -0.0123 -0.0123 -0.0123 -0.0123  .
+         - V76 : num [1:3058] 0.00463 0.00463 0.00463 0.00463 0.00463  .
+         - V77 : num [1:3058] -0.00651 -0.00651 -0.00651 -0.00651 -0.00651  .
+         - V78 : num [1:3058] 0.00283 0.00283 0.00283 0.00283 0.00283  .
+         - V79 : num [1:3058] 0.00251 0.00251 0.00251 0.00251 0.00251  .
+         - V80 : num [1:3058] -0.00562 -0.00562 -0.00562 -0.00562 -0.00562  .
+         - V81 : num [1:3058] -4.28e-05 -4.28e-05 -4.28e-05 -4.28e-05 -4.28e-05  .
+         - V82 : num [1:3058] 0.00545 0.00545 0.00545 0.00545 0.00545  .
+         - V83 : num [1:3058] 0.0161 0.0161 0.0161 0.0161 0.0161  .
+         - V84 : num [1:3058] -0.00197 -0.00197 -0.00197 -0.00197 -0.00197  .
+         - V85 : num [1:3058] 0.00828 0.00828 0.00828 0.00828 0.00828  .
+         - V86 : num [1:3058] -0.00809 -0.00809 -0.00809 -0.00809 -0.00809  .
+         - V87 : num [1:3058] -0.00181 -0.00181 -0.00181 -0.00181 -0.00181  .
+         - V88 : num [1:3058] 0.00243 0.00243 0.00243 0.00243 0.00243  .
+         - V89 : num [1:3058] -0.0113 -0.0113 -0.0113 -0.0113 -0.0113  .
+         - V90 : num [1:3058] -0.00209 -0.00209 -0.00209 -0.00209 -0.00209  .
+         - V91 : num [1:3058] -0.000592 -0.000592 -0.000592 -0.000592 -0.000592  .
+         - V92 : num [1:3058] -0.00927 -0.00927 -0.00927 -0.00927 -0.00927  .
+         - V93 : num [1:3058] 0.00196 0.00196 0.00196 0.00196 0.00196  .
+         - V94 : num [1:3058] -0.00297 -0.00297 -0.00297 -0.00297 -0.00297  .
+         - V95 : num [1:3058] -0.00303 -0.00303 -0.00303 -0.00303 -0.00303  .
+         - V96 : num [1:3058] 0.00184 0.00184 0.00184 0.00184 0.00184  .
+         - V97 : num [1:3058] -0.00621 -0.00621 -0.00621 -0.00621 -0.00621  .
+         - V98 : num [1:3058] -0.00255 -0.00255 -0.00255 -0.00255 -0.00255  .
+         - V99 : num [1:3058] 0.00107 0.00107 0.00107 0.00107 0.00107  .
+          [list output truncated]
+  5) [0/8] par    :List of 8
+     - [ ] cthr   : int 5
+     - [ ] knn    : num 3
+     - [ ] nmode  : logi TRUE
+     - [ ] fast   : logi FALSE
+     - [ ] fr     : logi FALSE
+     - [ ] pdishuf: int 2000
+     - [ ] rseed  : num 17000
+     - [ ] pthr   : num 0.01
+  6) [0/4] prback :'data.frame': 0 obs. of  0 variables with 4 slots
+     - [ ] .Data    : list()
+     - [ ] names    : chr(0) 
+     - [ ] row.names: int(0) 
+     - [ ] .S3Class : chr "data.frame"
+  7) [0/4] prbacka:'data.frame':	0 obs. of  0 variables Formal with 4 slots
+     - [ ] .Data    : list()
+     - [ ] names    : chr(0) 
+     - [ ] row.names: int(0) 
+     - [ ] .S3Class : chr "data.frame"
+  8) [ ] ltcoord: num [1:278, 1:2] 1.744 -0.897 0.407 1.924 1.831  .
+     - attr(*, "dimnames")=List of 2
+       - : chr [1:278] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
+       - : chr [1:2] "V1" "V2"
+  9) [0/2] prtree :List of 2
+     - [ ] n:List of 55
+       - 1.3  : chr [1:31] "I5d_3" "I5d_10" "I5d_39" "I5d_41"  .
+       - 2.3  : chr [1:26] "I5d_4" "I5d_30" "I5d_33" "I5d_34"  .
+       - 3.5  : chr [1:57] "I5d_6" "I5d_12" "I5d_13" "I5d_14"  .
+       - 1.6  : chr [1:17] "I5d_8" "I5d_17" "I5d_24" "I5d_53"  .
+       - 3.4  : chr [1:11] "I5d_9" "I5d_23" "I5d_52" "I5d_71"  .
+       - 2.4  : chr [1:34] "I5d_11" "I5d_31" "I5d_37" "I5d_52"  .
+       - 4.8  : chr [1:16] "I5d_25" "I5d_32" "I5d_42" "I5d_52"  .
+       - 1.8  : chr [1:4] "I5d_36" "II5d_52" "V5d_42" "V5d_72"
+       - 4.9  : chr [1:4] "I5d_38" "I5d_52" "III5d_82" "V5d_82"
+       - 3.12 : chr [1:6] "I5d_45" "I5d_60" "II5d_56" "II5d_59"  .
+       - 1.10 : chr [1:2] "I5d_47" "II5d_52"
+       - 2.10 : chr [1:2] "I5d_47" "II5d_61"
+       - 3.10 : chr [1:2] "I5d_47" "II5d_56"
+       - 4.10 : chr [1:2] "I5d_47" "I5d_52"
+       - 5.10 : chr [1:2] "I5d_47" "V5d_39"
+       - 6.10 : chr [1:2] "I5d_47" "II5d_90"
+       - 8.10 : chr [1:2] "I5d_47" "V5d_42"
+       - 9.10 : chr [1:2] "I5d_47" "III5d_82"
+       - 10.11: chr [1:22] "I5d_47" "I5d_51" "II5d_2" "II5d_14"  .
+       - 10.12: chr [1:22] "I5d_47" "I5d_62" "I5d_70" "I5d_87"  .
+       - 3.8  : chr [1:8] "I5d_49" "II5d_56" "IV5d_37" "V5d_38"  .
+       - 1.4  : chr [1:4] "I5d_52" "II5d_52" "III5d_15" "III5d_52"
+       - 4.5  : chr [1:3] "I5d_52" "IV5d_2" "V5d_39"
+       - 4.6  : chr [1:3] "I5d_52" "II5d_90" "III5d_17"
+       - 4.11 : chr [1:2] "I5d_52" "III5d_72"
+       - 4.12 : chr [1:2] "I5d_52" "V5d_66"
+       - 3.9  : chr [1:9] "I5d_54" "I5d_79" "II5d_51" "II5d_56"  .
+       - 9.11 : chr [1:3] "I5d_55" "III5d_72" "III5d_82"
+       - 8.11 : chr [1:7] "II5d_39" "II5d_73" "III5d_72" "V5d_36"  .
+       - 1.2  : chr [1:2] "II5d_52" "II5d_61"
+       - 1.5  : chr [1:2] "II5d_52" "V5d_39"
+       - 1.9  : chr [1:2] "II5d_52" "III5d_82"
+       - 1.11 : chr [1:2] "II5d_52" "III5d_72"
+       - 1.12 : chr [1:2] "II5d_52" "V5d_66"
+       - 2.12 : chr [1:4] "II5d_54" "II5d_61" "IV5d_36" "V5d_66"
+       - 3.6  : chr [1:2] "II5d_56" "II5d_90"
+       - 3.11 : chr [1:2] "II5d_56" "III5d_72"
+       - 2.5  : chr [1:2] "II5d_61" "V5d_39"
+       - 2.6  : chr [1:2] "II5d_61" "II5d_90"
+       - 2.8  : chr [1:12] "II5d_61" "III5d_96" "IV5d_1" "IV5d_10"  .
+       - 2.9  : chr [1:4] "II5d_61" "II5d_79" "III5d_82" "IV5d_6"
+       - 2.11 : chr [1:2] "II5d_61" "III5d_72"
+       - 8.12 : chr [1:3] "II5d_83" "V5d_42" "V5d_66"
+       - 5.6  : chr [1:2] "II5d_90" "V5d_39"
+       - 6.8  : chr [1:2] "II5d_90" "V5d_42"
+       - 6.9  : chr [1:2] "II5d_90" "III5d_82"
+       - 6.11 : chr [1:2] "II5d_90" "III5d_72"
+       - 6.12 : chr [1:2] "II5d_90" "V5d_66"
+       - 5.11 : chr [1:2] "III5d_72" "V5d_39"
+       - 11.12: chr [1:2] "III5d_72" "V5d_66"
+       - 5.9  : chr [1:2] "III5d_82" "V5d_39"
+       - 8.9  : chr [1:2] "III5d_82" "V5d_42"
+       - 9.12 : chr [1:2] "III5d_82" "V5d_66"
+       - 5.8  : chr [1:5] "V5d_18" "V5d_29" "V5d_39" "V5d_42"  .
+       - 5.12 : chr [1:2] "V5d_39" "V5d_66"
+     - [ ] l:List of 55
+       - 1.3  : num [1:31] 0.274 0.562 0.332 0.661 0.212  .
+       - 2.3  : num [1:26] 0.3703 0.4084 0.2295 0.5285 0.0692  .
+       - 3.5  : num [1:57] 0.408 0.494 0.464 0.574 0.123  .
+       - 1.6  : num [1:17] 0.279 0.759 0.968 0.715 0.989  .
+       - 3.4  : num [1:11] 0.769 0.77 1 0.791 0.595  .
+       - 2.4  : num [1:34] 0.537 0.615 0.332 1 0.83  .
+       - 4.8  : num [1:16] 0.415 0.152 0.152 0 0.358  .
+       - 1.8  : num [1:4] 0.6 0 1 0.54
+       - 4.9  : num [1:4] 0.518 0 1 0.885
+       - 3.12 : num [1:6] 0.451 0.673 0 0.549 0.651  .
+       - 1.10 : num [1:2] 1 0
+       - 2.10 : num [1:2] 1 0
+       - 3.10 : num [1:2] 1 0
+       - 4.10 : num [1:2] 1 0
+       - 5.10 : num [1:2] 1 0
+       - 6.10 : num [1:2] 1 0
+       - 8.10 : num [1:2] 1 0
+       - 9.10 : num [1:2] 1 0
+       - 10.11: num [1:22] 0 0.983 1.009 0.984 1.02  .
+       - 10.12: num [1:22] 0 0.7293 0.5414 0.7105 0.0693  .
+       - 3.8  : num [1:8] 0.424 0 0.554 0.516 1  .
+       - 1.4  : num [1:4] 1 0 0.576 0.433
+       - 4.5  : num [1:3] 0 0.332 1
+       - 4.6  : num [1:3] 0 1 0.855
+       - 4.11 : num [1:2] 0 1
+       - 4.12 : num [1:2] 0 1
+       - 3.9  : num [1:9] 0.755 0.452 0.494 0 0.297  .
+       - 9.11 : num [1:3] 0.234 1 0
+       - 8.11 : num [1:7] 0.594 0.419 1 0.267 0.648  .
+       - 1.2  : num [1:2] 0 1
+       - 1.5  : num [1:2] 0 1
+       - 1.9  : num [1:2] 0 1
+       - 1.11 : num [1:2] 0 1
+       - 1.12 : num [1:2] 0 1
+       - 2.12 : num [1:4] 0.407 0 0.775 1
+       - 3.6  : num [1:2] 0 1
+       - 3.11 : num [1:2] 0 1
+       - 2.5  : num [1:2] 0 1
+       - 2.6  : num [1:2] 0 1
+       - 2.8  : num [1:12] 0 0.459 0.465 0.549 0.421  .
+       - 2.9  : num [1:4] 0 0.813 1 0.519
+       - 2.11 : num [1:2] 0 1
+       - 8.12 : num [1:3] 0.377 0 1
+       - 5.6  : num [1:2] 1 0
+       - 6.8  : num [1:2] 0 1
+       - 6.9  : num [1:2] 0 1
+       - 6.11 : num [1:2] 0 1
+       - 6.12 : num [1:2] 0 1
+       - 5.11 : num [1:2] 1 0
+       - 11.12: num [1:2] 0 1
+       - 5.9  : num [1:2] 1 0
+       - 8.9  : num [1:2] 1 0
+       - 9.12 : num [1:2] 0 1
+       - 5.8  : num [1:5] 0.356 0.56 0 1 0.67
+       - 5.12 : num [1:2] 0 1
+  10) [0/7] cdata  :List of 7
+      - [ ] counts   :'data.frame':	11 obs. of  11 variables:
+        - cl.1 : num [1:11] 0 0 17 1 0 13 2 0 0 0  .
+        - cl.2 : num [1:11] 0 0 5 18 0 0 5 2 0 0  .
+        - cl.3 : num [1:11] 12 19 0 7 22 0 4 5 0 0  .
+        - cl.4 : num [1:11] 1 14 2 0 0 1 6 2 0 0  .
+        - cl.5 : num [1:11] 0 0 33 1 0 0 2 0 0 0  .
+        - cl.6 : num [1:11] 2 0 0 0 0 0 0 0 0 0  .
+        - cl.8 : num [1:11] 0 5 2 8 1 0 0 0 0 2  .
+        - cl.9 : num [1:11] 0 0 2 0 0 0 0 0 0 0  .
+        - cl.10: num [1:11] 0 0 0 0 0 0 0 0 0 19  .
+        - cl.11: num [1:11] 0 0 0 0 0 0 3 1 1 0  .
+        - cl.12: num [1:11] 0 1 1 0 0 0 1 0 8 0  .
+      - [ ] counts.br:'data.frame':	11 obs. of  11 variables:
+        - cl.1 : num [1:11] 0.977 2.689 4.688 2.38 1.512  .
+        - cl.2 : num [1:11] 2.44 6.72 11.72 5.95 3.78  .
+        - cl.3 : num [1:11] 3.85 10.59 18.46 9.37 5.95  .
+        - cl.4 : num [1:11] 2.2 6.05 10.55 5.36 3.4  .
+        - cl.5 : num [1:11] 1.47 4.03 7.03 3.57 2.27  .
+        - cl.6 : num [1:11] 0.916 2.521 4.395 2.231 1.417  .
+        - cl.8 : num [1:11] 1.47 4.03 7.03 3.57 2.27  .
+        - cl.9 : num [1:11] 0.672 1.849 3.223 1.636 1.039  .
+        - cl.10: num [1:11] 0.611 1.681 2.93 1.488 0.945  .
+        - cl.11: num [1:11] 1.34 3.7 6.45 3.27 2.08  .
+        - cl.12: num [1:11] 1.04 2.86 4.98 2.53 1.61  .
+      - [ ] pv.e     : num [1:11, 1:11] 5.00e-01 1.00 2.38e-06 9.15e-01 1.00  .
+        - attr(*, "dimnames")=List of 2
+          - : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4"  .
+          - : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4"  .
+      - [ ] pv.d     : num [1:11, 1:11] 0.5 0.0618 1 0.3024 0.2098  .
+        - attr(*, "dimnames")=List of 2
+          - : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4"  .
+          - : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4"  .
+      - [ ] pvn.e    : num [1:11, 1:11] NA 1.00 2.38e-06 9.15e-01 1.00  .
+        - attr(*, "dimnames")=List of 2
+          - : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4"  .
+          - : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4"  .
+      - [ ] pvn.d    : num [1:11, 1:11] NA 0.0618 1 0.3024 0.2098  .
+        - attr(*, "dimnames")=List of 2
+          - : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4"  .
+          - : chr [1:11] "cl.1" "cl.2" "cl.3" "cl.4"  .
+      - [ ] linkscore:'data.frame':	11 obs. of  11 variables:
+        - cl.1 : logi [1:11] NA NA NA NA NA NA  .
+        - cl.2 : num [1:11] 0 NA NA NA NA NA NA NA NA NA  .
+        - cl.3 : num [1:11] 0.9 0.8 NA NA NA NA NA NA NA NA  .
+        - cl.4 : num [1:11] 0 0.9 0 NA NA NA NA NA NA NA  .
+        - cl.5 : num [1:11] 0 0 1 0 NA NA NA NA NA NA  .
+        - cl.6 : num [1:11] 0.7 0 0 0 0 NA NA NA NA NA  .
+        - cl.8 : num [1:11] 0 0 0 0 0 0 NA NA NA NA  .
+        - cl.9 : num [1:11] 0 0 0 0 0 0 0 NA NA NA  .
+        - cl.10: num [1:11] 0 0 0 0 0 0 0 0 NA NA  .
+        - cl.11: num [1:11] 0 0 0 0 0 0 0 0 0.2 NA  .
+        - cl.12: num [1:11] 0 0 0 0 0 0 0 0 0.9 0  .
 
 
-  #+begin_src R :session yes  :results output
-    library(RaceID)
-    tab <- readRDS('test.rdata')@sc
-    str(tab, max.level = 2)
-  #+end_src
+#+begin_src python
+  import rpy2.robjects as robjects
+  from rpy2.robjects import pandas2ri
+  pandas2ri.activate()
 
-  #+RESULTS:
-  #+begin_example
-
-  Formal class 'SCseq' [package "RaceID"] with 18 slots
-    ..@ expdata   :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
-    ..@ ndata     :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
-    ..@ counts    : Named num [1:287] 5697 11803 14142 3801 3763 ...
-    .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
-    ..@ genes     : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1" ...
-    ..@ dimRed    : list()
-    ..@ distances : num [1:287, 1:287] 0 0.358 0.201 0.232 0.457 ...
-    .. ..- attr(*, "dimnames")=List of 2
-    ..@ imputed   : list()
-    ..@ tsne      :'data.frame':	287 obs. of  2 variables:
-    ..@ fr        :'data.frame':	287 obs. of  2 variables:
-    ..@ cluster   :List of 5
-    ..@ background:List of 1
-    ..@ out       :List of 5
-    ..@ cpart     : Named int [1:287] 1 2 3 1 4 3 4 3 3 5 ...
-    .. ..- attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8" ...
-    ..@ medoids   : chr [1:14] "II5d_52" "II5d_61" "II5d_56" "I5d_52" ...
-    ..@ fcol      : chr [1:14] "#0024FFFF" "#00FF92FF" "#B600FFFF" "#00FF24FF" ...
-    ..@ filterpar :List of 7
-    ..@ clusterpar:List of 9
-    ..@ outlierpar:List of 4
-  #+end_example
-
-* Questions
-
-** Is this going to be a True wrapper?
- + i.e. is every variable going to be completely absorbed into the AnnData?
- + If so, then I would need to run a converted/deconverter between every wrapper
+  readRDS = robjects.r['readRDS']
+  sce = readRDS('~/Downloads/lineagestemid.rds')
 
 
-** Should I only wrap the visual aspects?
 
-This would mean that RaceID will still need to pass these RData objects between versions.
+
+
+#+end_src
