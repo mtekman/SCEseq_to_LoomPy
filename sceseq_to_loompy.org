@@ -1169,44 +1169,44 @@ Let's summarise the above
          - [ ] attr(*, "class")= chr "clboot"
        + [X] features: chr [1:500] "Aadac" "Abcd3" "Abhd17a" "Abp1"  .
      - [ ] background:List of 1
-       - vfit:List of 12
-         - coefficients : Named num [1:3] 1.12 1.2 0.11
+       - [ ] vfit:List of 12
+         - [ ] coefficients : Named num [1:3] 1.12 1.2 0.11
            - attr(*, "names")= chr [1:3] "(Intercept)" "ml" "I(ml^2)"
-         - residuals    : Named num [1:2089] 0.0673 -0.2633 -0.0872 -0.7967 -0.3425  .
+         - [ ] residuals    : Named num [1:2089] 0.0673 -0.2633 -0.0872 -0.7967 -0.3425  .
            - attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
-         - effects      : Named num [1:2089] -116.863 97.874 12.996 -0.795 -0.341  .
+         - [ ] effects      : Named num [1:2089] -116.863 97.874 12.996 -0.795 -0.341  .
            - attr(*, "names")= chr [1:2089] "(Intercept)" "ml" "I(ml^2)" ""  .
-         - rank         : int 3
-         - fitted.values: Named num [1:2089] 2.32 1.67 1.51 1.26 1.46  .
+         - [ ] rank         : int 3
+         - [ ] fitted.values: Named num [1:2089] 2.32 1.67 1.51 1.26 1.46  .
            - attr(*, "names")= chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
-         - assign       : int [1:3] 0 1 2
-         - qr           :List of 5
-           - qr   : num [1:2089, 1:3] -45.7056 0.0219 0.0219 0.0219 0.0219  .
+         - [ ] assign       : int [1:3] 0 1 2
+         - [ ] qr           :List of 5
+           - [ ] qr   : num [1:2089, 1:3] -45.7056 0.0219 0.0219 0.0219 0.0219  .
              - attr(*, "dimnames")=List of 2
                - : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
                - : chr [1:3] "(Intercept)" "ml" "I(ml^2)"
              - attr(*, "assign")= int [1:3] 0 1 2
-           - qraux: num [1:3] 1.02 1.01 1
-           - pivot: int [1:3] 1 2 3
-           - tol  : num 1e-07
-           - rank : int 3
+           - [ ] qraux: num [1:3] 1.02 1.01 1
+           - [ ] pivot: int [1:3] 1 2 3
+           - [ ] tol  : num 1e-07
+           - [ ] rank : int 3
            - attr(*, "class")= chr "qr"
-         - df.residual  : int 2086
-         - xlevels      : Named list()
-         - call         : language lm(formula = vl ~ ml   I(ml^2))
-         - terms        :Classes 'terms', 'formula'  language vl ~ ml   I(ml^2)
-           - attr(*, "variables")= language list(vl, ml, I(ml^2))
-           - attr(*, "factors")= int [1:3, 1:2] 0 1 0 0 0 1
+         - [ ] df.residual  : int 2086
+         - [ ] xlevels      : Named list()
+         - [ ] call         : language lm(formula = vl ~ ml   I(ml^2))
+         - [ ] terms        :Classes 'terms', 'formula'  language vl ~ ml   I(ml^2)
+           - [ ] attr(*, "variables")= language list(vl, ml, I(ml^2))
+           - [ ] attr(*, "factors")= int [1:3, 1:2] 0 1 0 0 0 1
              - attr(*, "dimnames")=List of 2
                - : chr [1:3] "vl" "ml" "I(ml^2)"
                - : chr [1:2] "ml" "I(ml^2)"
-           - attr(*, "term.labels")= chr [1:2] "ml" "I(ml^2)"
-           - attr(*, "order")= int [1:2] 1 1
-           - attr(*, "intercept")= int 1
-           - attr(*, "response")= int 1
-           - attr(*, ".Environment")=<environment: 0x5605c74c8d78>
-           - attr(*, "predvars")= language list(vl, ml, I(ml^2))
-           - attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
+           - [ ] attr(*, "term.labels")= chr [1:2] "ml" "I(ml^2)"
+           - [ ] attr(*, "order")= int [1:2] 1 1
+           - [ ] attr(*, "intercept")= int 1
+           - [ ] attr(*, "response")= int 1
+           - [ ] attr(*, ".Environment")=<environment: 0x5605c74c8d78>
+           - [ ] attr(*, "predvars")= language list(vl, ml, I(ml^2))
+           - [ ] attr(*, "dataClasses")= Named chr [1:3] "numeric" "numeric" "numeric"
              - attr(*, "names")= chr [1:3] "vl" "ml" "I(ml^2)"
          - model        :'data.frame':	2089 obs. of  3 variables:
            - vl     : Named num [1:2089] 2.385 1.41 1.422 0.459 1.118  .
@@ -1843,6 +1843,7 @@ Let's summarise the above
 
 #+begin_src python
   import rpy2.robjects as robjects
+  import pandas as pd
   from anndata import AnnData
 
   from rpy2.rinterface import NULL, SexpS4
@@ -1865,7 +1866,7 @@ Let's summarise the above
   # Dealing only with sc object
   sc = sc_and_ltree.slots["sc"]
 
-  def extract_matrix(dgcobj):
+  def extract_matrix(dgcobj, sname = None):
       if sname is not None:
           rownames = pandas2ri.ri2py_vector(dgcobj.slots[sname][0])
           colnames = pandas2ri.ri2py_vector(dgcobj.slots[sname][1])
@@ -1894,32 +1895,35 @@ Let's summarise the above
       with localconverter(default_converter):
           slots = RSlots(obj)
 
-          def getsub(names_array, parse=True):
-              if type(names_array) is str:
-                  names_array = names_array.split('_')
-              ## First is the slot name, rest are indices
-              res = subget(slots[names_array[0]], names_array[1:])
-              if not parse:
-                  return(res)
+          def dorec(recipe):
+              res = {}
 
-              if res is rpy2.rinterface.NULL:
-                  res = None
-              elif len(res) == 1:
-                  res = res[0]
+              def assignrec(x, backprop = []):
+                  if type(x) is dict:
+                      for key in x:
+                          rec(x[key], backprop + [key])
+                  else:
+                      print(getsub(backprop))
+                      #print("ASDA")
+
+              assignrec(recipe)
+              return(res)
+
+        
+          def getsub(names_array, parse=True):
+              if type(names_array) is str:names_array = names_array.split('_')
+              res = subget(slots[names_array[0]], names_array[1:])
+              if not parse:return(res)
+              if res is NULL:res = None
+              elif len(res) == 1:res = res[0]
               elif len(res) > 1:
-                  if 'Matrix' in res.__class__.__name__:
-                      res = extract_matrix(res)
+                  if 'Matrix' in res.__class__.__name__:res = extract_matrix(res)
                   elif 'Vector' in res.__class__.__name__:
                       if hasattr(res, "names"):
-                          if res.names is rpy2.rinterface.NULL:
-                              res = extract_array(res)
-                          else:
-                              res = extract_namedvector(res)
-                      else:
-                          res = extract_array(res)
-                  else:
-                      print("Panic", names_array)
-
+                          if res.names is NULL:res = extract_array(res)
+                          else:res = extract_namedvector(res)
+                      else:res = extract_array(res)
+                  else:print("Panic", names_array)
               return(res)
 
           # AnnData(exprs, obs, var, uns, obsm, layers)
@@ -1929,11 +1933,24 @@ Let's summarise the above
           ndata = extract_matrix(slots["ndata"], "Dimnames")
 
           # obs
-          counts = getsub(["counts"])  # libsize
-          cluster_kpart = getsub("cluster_kpart")
-          cluster_clb_partition = getsub("cluster_clb_partition")
-          cluster_clb_result_partition = getsub("cluster_clb_result_partition")
-          cluster_clb_result_result_pamobject_clustering = getsub("cluster_clb_result_result_pamobject_clustering")
+          obs_vals = {
+              "counts" : None,
+              "cluster" : {
+                  "kpart" : None,
+                  "clb" : {
+                      "partition" : None,
+                      "result" : {
+                          "partition" : None,
+                          "result" : {
+                              "pamobject" : {
+                                  "clustering" : None,
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+          oo = dorec(obs_vals)
 
           # obsm -- two or more dimensions
           distances = extract_matrix(slots["distances"], "dimnames")
@@ -1945,41 +1962,35 @@ Let's summarise the above
           genes = extract_array(slots["genes"]) # gene names
 
           # uns
-
-          ## Process Cluster
+          uns_vals = {
+              "cluster" : {
+                  "gap": {
+                      "n" : None, "B" : None, "Tab" : None
+                  },
+                  "clb" : {
+                      "nc" : None, "nccl" : None, "clustermethod" : None, "B" : None, "noisemethod" : None, "bootmethod" : None, "multipleboot" : None, "dissolution" : None, "recover" : None, "bootresult" : None, "bootmean" : None, "bootbrd" : None, "bootrecover" : None, "jitterresult" : None, "jittermean" : None, "jitterbrd" : None, "jitterrecover" : None, "subsetresult" : None, "subsetmean" : None, "subsetbrd" : None, "subsetrecover" : None, "bojitresult" : None, "bojitmean" : None, "bojitbrd" : None, "bojitrecover" : None, "noiseresult" : None, "noisemean" : None, "noisebrd" : None, "noiserecover" : None,
+                      "result" : {
+                          "nc" : None, "clustermethod" : None, "criterion" : None, "nccl" : None,
+                          "result" : {
+                              "nc" : None, "crit" : None,
+                              "pamobject" : {
+                                  "medoids" : None, "id.med" : None, "objective" : None, "isolation" : None, "clusinfo" : None, "diss" : None,
+                                  "silinfo" : {
+                                      "clus.avg.widths" : None, "avg.width" : None
+                                  },
+                              },
+                          },
+                      },
+                  },
+                  "features" : None,
+                  "jaccard" : None
+              },
+          }
+          assignrec(uns_vals)
           cluster_jaccard = extract_array(getsub(["cluster_jaccard"]))
           cluster_gap_tab = extract_matrix(getsub(["cluster_gap_Tab"]))
-          cluster_singlevals = [
-              "gap_n", "gap_B",
-              "clb_nc", "clb_nccl", "clb_clustermethod", "clb_B", "clb_noisemethod",
-              "clb_bootmethod", "clb_multipleboot",
-              "clb_dissolution", "clb_recover",
-              "clb_bootresult", "clb_bootmean", "clb_bootbrd", "clb_bootrecover",
-              "clb_jitterresult", "clb_jittermean", "clb_jitterbrd", "clb_jitterrecover",
-              "clb_subsetresult", "clb_subsetmean", "clb_subsetbrd", "clb_subsetrecover",
-              "clb_bojitresult", "clb_bojitmean", "clb_bojitbrd", "clb_bojitrecover",
-              "clb_noiseresult", "clb_noisemean", "clb_noisebrd", "clb_noiserecover",
-              "clb_result_nc", "clb_result_clustermethod", "clb_result_criterion", "clb_result_nccl",
-              "clb_result_result_nc", "clb_result_result_crit",
-              "clb_result_result_pamobject_medoids", "clb_result_result_pamobject_id.med",
-              "clb_result_result_pamobject_objective", "clb_result_result_pamobject_isolation",
-              "clb_result_result_pamobject_clusinfo", "clb_result_result_pamobject_diss",
-              "clb_result_result_pamobject_silinfo_clus.avg.widths",
-              "clb_result_result_pamobject_silinfo_avg.width",
-              "features"
-          ]
-          cluster_singlevals_res = {}
-          for x in cluster_singlevals:
-              print(x)
-              cluster_singlevals_res[x] = getsub(["cluster"] + x.split("_"))
 
           # Bool arrays...
           cluster_clb_result_clusterlist = pd.DataFrame([
               extract_namedvector(tx) for tx in subget(slots["cluster"], ["clb", "result", "clusterlist"])])
-
-
-
-
-
-      nobj[nobj.names.index("gap")][nobj[nobj.names.index("gap")].names.index("Tab")]
 #+end_src
