@@ -201,7 +201,8 @@ The aim of this notebook to is document the process of creating a SCESeq to Loom
 
 * Second Stab
 
-AnnData is the game.
+AnnData is the game. We have to do this in Python because anndata works in Python. A good place to start is here:
++ https://github.com/theislab/anndata2ri/blob/master/anndata2ri/r2py.py
 
 #+begin_src R :results output
   tab <- readRDS('~/Downloads/lineagestemid.rds')
@@ -1028,8 +1029,8 @@ Formal class 'data.frame' [package "methods"] with 4 slots
 Let's summarise the above
 
 + Ltree with 10 slots
-  1) [0/18] sc     :Formal class 'SCseq' [package "RaceID"] with 18 slots
-     - [ ] expdata   :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+  1) [7/17] sc     :Formal class 'SCseq' [package "RaceID"] with 18 slots
+     - [X] expdata   :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
        + i       : int [1:961619] 30 101 116 127 151 171 183 234 248 344  .
        + p       : int [1:432] 0 534 2832 6603 6666 10692 11984 13808 15517 20386  .
        + Dim     : int [1:2] 20268 431
@@ -1038,7 +1039,7 @@ Let's summarise the above
          - : chr [1:431] "I5d_2" "I5d_3" "I5d_4" "I5d_5"  .
        + x       : num [1:961619] 1 1 1 1 1  .
        + factors : list()
-     - [ ] ndata     :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
+     - [X] ndata     :Formal class 'dgCMatrix' [package "Matrix"] with 6 slots
        + i       : int [1:876212] 16 26 30 35 37 38 44 77 91 102  .
        + p       : int [1:288] 0 2298 6069 10095 11919 13628 18497 21411 25265 28324  .
        + Dim     : int [1:2] 20268 287
@@ -1047,64 +1048,64 @@ Let's summarise the above
          - : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
        + x       : num [1:876212] 0.000176 0.000176 0.000886 0.000176 0.000886  .
        + factors : list()
-     - [ ] counts    : Named num [1:287] 5697 11803 14142 3801 3763  .
+     - [X] counts    : Named num [1:287] 5697 11803 14142 3801 3763  .
        - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
-     - [ ] genes     : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
+     - [X] genes     : chr [1:2089] "Aadac" "Aamp" "Abcd3" "Abcf1"  .
      - [ ] dimRed    : list()
-     - [ ] distances : num [1:287, 1:287] 0 0.358 0.201 0.232 0.457  .
+     - [X] distances : num [1:287, 1:287] 0 0.358 0.201 0.232 0.457  .
        - attr(*, "dimnames")=List of 2
          - : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
          - : chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
      - [ ] imputed   : list()
-     - [ ] tsne      :'data.frame':	287 obs. of  2 variables:
+     - [X] tsne      :'data.frame':	287 obs. of  2 variables:
        - V1: num [1:287] 1.633 -0.147 0.259 1.538 2.956  .
        - V2: num [1:287] 9.722 0.917 6.539 11.574 -1.691  .
-     - [ ] fr        :'data.frame':	287 obs. of  2 variables:
+     - [X] fr        :'data.frame':	287 obs. of  2 variables:
        - V1: num [1:287] -2.775 4.49 0.967 -4.075 4.585  .
        - V2: num [1:287] -3.911 -3.383 -4.635 -5.193 -0.448  .
-     - [ ] cluster   :List of 5
-       - kpart   : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+     - [3/3] cluster   :List of 5
+       + [X] kpart   : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
          - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
-       - jaccard : num [1:12] 0.574 0.666 0.539 0.772 0.303  .
-       - gap     :List of 4
-         - Tab       : num [1:30, 1:4] 4.43 4.26 4.18 4.04 3.93  .
+       + [X] jaccard : num [1:12] 0.574 0.666 0.539 0.772 0.303  .
+       + [3/5] gap     :List of 4
+         - [X] Tab       : num [1:30, 1:4] 4.43 4.26 4.18 4.04 3.93  .
            - attr(*, "dimnames")=List of 2
              - : NULL
              - : chr [1:4] "logW" "E.logW" "gap" "SE.sim"
-         - n         : int 287
-         - B         : int 100
-         - FUNcluster:function (x, k)
-         - attr(*, "class")= chr "clusGap"
-       - clb     :List of 31
-         - result       :List of 7
-           - result       :List of 3
-             - pamobject:List of 9
-               - medoids   : chr [1:12] "II5d_52" "II5d_61" "II5d_56" "I5d_52"  .
-               - id.med    : int [1:12] 110 119 114 40 250 137 276 252 192 35  .
-               - clustering: Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+         - [X] n         : int 287
+         - [X] B         : int 100
+         - [ ] FUNcluster:function (x, k)
+         - [ ] attr(*, "class")= chr "clusGap"
+       + [30/32] clb     :List of 31
+         - [-] [6/7] result       :List of 7
+           - [-] [2/3] result       :List of 3
+             - [-] [8/9] pamobject:List of 9
+               - [X] medoids   : chr [1:12] "II5d_52" "II5d_61" "II5d_56" "I5d_52"  .
+               - [X] id.med    : int [1:12] 110 119 114 40 250 137 276 252 192 35  .
+               - [X] clustering: Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
                  - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
-               - objective : Named num [1:2] 0.209 0.201
+               - [X] objective : Named num [1:2] 0.209 0.201
                  - attr(*, "names")= chr [1:2] "build" "swap"
-               - isolation : Factor w/ 3 levels "no","L","L*": 1 1 1 1 1 1 3 1 1 1  .
+               - [X] isolation : Factor w/ 3 levels "no","L","L*": 1 1 1 1 1 1 3 1 1 1  .
                  - attr(*, "names")= chr [1:12] "1" "2" "3" "4"  .
-               - clusinfo  : num [1:12, 1:5] 16 40 64 36 25 15 5 25 11 10  .
+               - [X] clusinfo  : num [1:12, 1:5] 16 40 64 36 25 15 5 25 11 10  .
                  - attr(*, "dimnames")=List of 2
                    - : NULL
                    - : chr [1:5] "size" "max_diss" "av_diss" "diameter"  .
-               - silinfo   :List of 3
-                 - widths         : num [1:287, 1:3] 1 1 1 1 1 1 1 1 1 1  .
+               - [X] [3/3] silinfo   :List of 3
+                 - [X] widths         : num [1:287, 1:3] 1 1 1 1 1 1 1 1 1 1  .
                    - attr(*, "dimnames")=List of 2
                      - : chr [1:287] "III5d_54" "II5d_52" "I5d_8" "V5d_19"  .
                      - : chr [1:3] "cluster" "neighbor" "sil_width"
-                 - clus.avg.widths: num [1:12] 0.1676 0.1226 0.0581 0.0929 0.1389  .
-                 - avg.width      : num 0.199
-               - diss      : NULL
-               - call      : language cluster::pam(x = as.dist(sdata), k = k, diss = TRUE)
+                 - [X] clus.avg.widths: num [1:12] 0.1676 0.1226 0.0581 0.0929 0.1389  .
+                 - [X] avg.width      : num 0.199
+               - [X] diss      : NULL
+               - [ ] call      : language cluster::pam(x = as.dist(sdata), k = k, diss = TRUE)
                - attr(*, "class")= chr [1:2] "pam" "partition"
-             - nc       : num 12
-             - crit     : num [1:12] 0 0 0 0 0 0 0 0 0 0  .
-           - nc           : num 12
-           - clusterlist  :List of 12
+             - [X] nc       : num 12
+             - [X] crit     : num [1:12] 0 0 0 0 0 0 0 0 0 0  .
+           - [X] nc           : num 12
+           - [X] clusterlist  :List of 12
              - : Named logi [1:287] TRUE FALSE FALSE TRUE FALSE FALSE  .
                - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
              - : Named logi [1:287] FALSE TRUE FALSE FALSE FALSE FALSE  .
@@ -1129,44 +1130,44 @@ Let's summarise the above
                - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
              - : Named logi [1:287] FALSE FALSE FALSE FALSE FALSE FALSE  .
                - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
-           - partition    : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+           - [X] partition    : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
              - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
-           - clustermethod: chr "pam/estimated k"
-           - criterion    : chr "asw"
-           - nccl         : num 12
-         - partition    : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
+           - [X] clustermethod: chr "pam/estimated k"
+           - [X] criterion    : chr "asw"
+           - [X] nccl         : num 12
+         - [X] partition    : Named int [1:287] 1 2 3 1 4 3 4 3 3 5  .
            - attr(*, "names")= chr [1:287] "I5d_3" "I5d_4" "I5d_6" "I5d_8"  .
-         - nc           : num 12
-         - nccl         : num 12
-         - clustermethod: chr "pam/estimated k"
-         - B            : num 50
-         - noisemethod  : logi FALSE
-         - bootmethod   : chr "boot"
-         - multipleboot : logi FALSE
-         - dissolution  : num 0.5
-         - recover      : num 0.75
-         - bootresult   : num [1:12, 1:50] 1 0.667 0.396 0.833 0.269  .
-         - bootmean     : num [1:12] 0.574 0.666 0.539 0.772 0.303  .
-         - bootbrd      : int [1:12] 20 10 23 3 44 0 0 34 29 13  .
-         - bootrecover  : int [1:12] 18 17 3 31 1 48 50 7 10 25  .
-         - jitterresult : NULL
-         - jittermean   : NULL
-         - jitterbrd    : NULL
-         - jitterrecover: NULL
-         - subsetresult : NULL
-         - subsetmean   : NULL
-         - subsetbrd    : NULL
-         - subsetrecover: NULL
-         - bojitresult  : NULL
-         - bojitmean    : NULL
-         - bojitbrd     : NULL
-         - bojitrecover : NULL
-         - noiseresult  : NULL
-         - noisemean    : NULL
-         - noisebrd     : NULL
-         - noiserecover : NULL
-         - attr(*, "class")= chr "clboot"
-       - features: chr [1:500] "Aadac" "Abcd3" "Abhd17a" "Abp1"  .
+         - [X] nc           : num 12
+         - [X] nccl         : num 12
+         - [X] clustermethod: chr "pam/estimated k"
+         - [X] B            : num 50
+         - [X] noisemethod  : logi FALSE
+         - [X] bootmethod   : chr "boot"
+         - [X] multipleboot : logi FALSE
+         - [X] dissolution  : num 0.5
+         - [X] recover      : num 0.75
+         - [X] bootresult   : num [1:12, 1:50] 1 0.667 0.396 0.833 0.269  .
+         - [X] bootmean     : num [1:12] 0.574 0.666 0.539 0.772 0.303  .
+         - [X] bootbrd      : int [1:12] 20 10 23 3 44 0 0 34 29 13  .
+         - [X] bootrecover  : int [1:12] 18 17 3 31 1 48 50 7 10 25  .
+         - [X] jitterresult : NULL
+         - [X] jittermean   : NULL
+         - [X] jitterbrd    : NULL
+         - [X] jitterrecover: NULL
+         - [X] subsetresult : NULL
+         - [X] subsetmean   : NULL
+         - [X] subsetbrd    : NULL
+         - [X] subsetrecover: NULL
+         - [X] bojitresult  : NULL
+         - [X] bojitmean    : NULL
+         - [X] bojitbrd     : NULL
+         - [X] bojitrecover : NULL
+         - [X] noiseresult  : NULL
+         - [X] noisemean    : NULL
+         - [X] noisebrd     : NULL
+         - [X] noiserecover : NULL
+         - [ ] attr(*, "class")= chr "clboot"
+       + [X] features: chr [1:500] "Aadac" "Abcd3" "Abhd17a" "Abp1"  .
      - [ ] background:List of 1
        - vfit:List of 12
          - coefficients : Named num [1:3] 1.12 1.2 0.11
@@ -1841,14 +1842,144 @@ Let's summarise the above
 
 
 #+begin_src python
-  import rpy2.situation
-
-  import pdb; pdb.set_trace()
   import rpy2.robjects as robjects
+  from anndata import AnnData
 
+  from rpy2.rinterface import NULL, SexpS4
+  from rpy2.robjects import default_converter
+  from rpy2.robjects.conversion import localconverter
+  from rpy2.robjects.robject import RSlots
   from rpy2.robjects import pandas2ri
+
+  # Automatic conversion from R type to Pandas
   pandas2ri.activate()
 
+  from rpy2.robjects.packages import importr
+
+  rid = importr("RaceID")
+  rmat = importr("Matrix")
+
   readRDS = robjects.r['readRDS']
-  sce = readRDS('~/Downloads/lineagestemid.rds')
+  sc_and_ltree = readRDS('/extra/lineagestemid.rds')
+
+  # Dealing only with sc object
+  sc = sc_and_ltree.slots["sc"]
+
+  def extract_matrix(dgcobj):
+      if sname is not None:
+          rownames = pandas2ri.ri2py_vector(dgcobj.slots[sname][0])
+          colnames = pandas2ri.ri2py_vector(dgcobj.slots[sname][1])
+      else:
+          rownames = None
+          colnames = None
+      return(pd.DataFrame(
+          pandas2ri.ri2py(rmat.as_matrix(dgcobj)),
+          index=rownames, columns=colnames))
+
+  def extract_namedvector(vec):
+      return(pd.Series(pandas2ri.ri2py_vector(vec),
+                       index=pandas2ri.ri2py_vector(vec.names)))
+
+  def extract_array(vec):
+      return(pandas2ri.ri2py_vector(vec))
+
+  def subget(slot_obj, names_array):
+      tmp_arr = slot_obj
+      for na in names_array:
+          tmp_arr = tmp_arr[tmp_arr.names.index(na)]
+      return(tmp_arr)
+
+
+  def r2py_sceseq(obj: SexpS4) -> AnnData:
+      with localconverter(default_converter):
+          slots = RSlots(obj)
+
+          def getsub(names_array, parse=True):
+              if type(names_array) is str:
+                  names_array = names_array.split('_')
+              ## First is the slot name, rest are indices
+              res = subget(slots[names_array[0]], names_array[1:])
+              if not parse:
+                  return(res)
+
+              if res is rpy2.rinterface.NULL:
+                  res = None
+              elif len(res) == 1:
+                  res = res[0]
+              elif len(res) > 1:
+                  if 'Matrix' in res.__class__.__name__:
+                      res = extract_matrix(res)
+                  elif 'Vector' in res.__class__.__name__:
+                      if hasattr(res, "names"):
+                          if res.names is rpy2.rinterface.NULL:
+                              res = extract_array(res)
+                          else:
+                              res = extract_namedvector(res)
+                      else:
+                          res = extract_array(res)
+                  else:
+                      print("Panic", names_array)
+
+              return(res)
+
+          # AnnData(exprs, obs, var, uns, obsm, layers)
+          expdata = extract_matrix(slots["expdata"], "Dimnames")
+
+          # Layers
+          ndata = extract_matrix(slots["ndata"], "Dimnames")
+
+          # obs
+          counts = getsub(["counts"])  # libsize
+          cluster_kpart = getsub("cluster_kpart")
+          cluster_clb_partition = getsub("cluster_clb_partition")
+          cluster_clb_result_partition = getsub("cluster_clb_result_partition")
+          cluster_clb_result_result_pamobject_clustering = getsub("cluster_clb_result_result_pamobject_clustering")
+
+          # obsm -- two or more dimensions
+          distances = extract_matrix(slots["distances"], "dimnames")
+          tsne = pd.DataFrame([extract_array(slots["tsne"][0]), extract_array(slots["tsne"][1])])
+          fr = pd.DataFrame([extract_array(slots["fr"][0]), extract_array(slots["fr"][1])])
+          cluster_clb_result_result_pamobject_silinfo_widths = getsub("cluster_clb_result_result_pamobject_silinfo_widths")
+
+          # vars
+          genes = extract_array(slots["genes"]) # gene names
+
+          # uns
+
+          ## Process Cluster
+          cluster_jaccard = extract_array(getsub(["cluster_jaccard"]))
+          cluster_gap_tab = extract_matrix(getsub(["cluster_gap_Tab"]))
+          cluster_singlevals = [
+              "gap_n", "gap_B",
+              "clb_nc", "clb_nccl", "clb_clustermethod", "clb_B", "clb_noisemethod",
+              "clb_bootmethod", "clb_multipleboot",
+              "clb_dissolution", "clb_recover",
+              "clb_bootresult", "clb_bootmean", "clb_bootbrd", "clb_bootrecover",
+              "clb_jitterresult", "clb_jittermean", "clb_jitterbrd", "clb_jitterrecover",
+              "clb_subsetresult", "clb_subsetmean", "clb_subsetbrd", "clb_subsetrecover",
+              "clb_bojitresult", "clb_bojitmean", "clb_bojitbrd", "clb_bojitrecover",
+              "clb_noiseresult", "clb_noisemean", "clb_noisebrd", "clb_noiserecover",
+              "clb_result_nc", "clb_result_clustermethod", "clb_result_criterion", "clb_result_nccl",
+              "clb_result_result_nc", "clb_result_result_crit",
+              "clb_result_result_pamobject_medoids", "clb_result_result_pamobject_id.med",
+              "clb_result_result_pamobject_objective", "clb_result_result_pamobject_isolation",
+              "clb_result_result_pamobject_clusinfo", "clb_result_result_pamobject_diss",
+              "clb_result_result_pamobject_silinfo_clus.avg.widths",
+              "clb_result_result_pamobject_silinfo_avg.width",
+              "features"
+          ]
+          cluster_singlevals_res = {}
+          for x in cluster_singlevals:
+              print(x)
+              cluster_singlevals_res[x] = getsub(["cluster"] + x.split("_"))
+
+          # Bool arrays...
+          cluster_clb_result_clusterlist = pd.DataFrame([
+              extract_namedvector(tx) for tx in subget(slots["cluster"], ["clb", "result", "clusterlist"])])
+
+
+
+
+
+      nobj[nobj.names.index("gap")][nobj[nobj.names.index("gap")].names.index("Tab")]
 #+end_src
