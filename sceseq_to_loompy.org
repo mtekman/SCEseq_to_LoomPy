@@ -1841,12 +1841,14 @@ Let's summarise the above
 
 
 #+begin_src python
+  import rpy2.situation
+
+  import pdb; pdb.set_trace()
   import rpy2.robjects as robjects
+
   from rpy2.robjects import pandas2ri
   pandas2ri.activate()
 
   readRDS = robjects.r['readRDS']
   sce = readRDS('~/Downloads/lineagestemid.rds')
-
-
 #+end_src
